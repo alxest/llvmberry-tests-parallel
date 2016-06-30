@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent._
 import scala.util.Random
 import java.io.File
+import scala.util.parsing.json._
+import collection.mutable.Map
 
 // object TimeChecker {
 //   var data: scala.collection.mutable.HashMap[String, Long] = scala.collection.mutable.HashMap()
@@ -30,15 +32,42 @@ object CommonLogics {
   def exec(cmd: String): (Int, String) = {
     val x = new StringBuilder
     //merge stdout and stderr
-    val myProcessLogger =
-      ProcessLogger(x.append(_).append("\n"), x.append(_).append("\n"))
-      // o => x.append(o + "\n"),
-      // e => x.append(e + "\n"))
+    val myProcessLogger = {
+      def appendLine(s: String) = {
+        // try {
+          x.append(s + "\n")
+        // }
+        // catch {
+        //   case _: Throwable =>
+        //   println; println; println; println(cmd); println; println; println; println; println; println
+        // }
+      }
+      ProcessLogger(appendLine, appendLine)
+    }
     // val retCode = stringToProcess("/bin/sh -c" + cmd) ! myProcessLogger // this does not work..
     //http://alvinalexander.com/scala/how-to-handle-wildcard-characters-running-external-commands
-    val retCode = stringSeqToProcess(Seq("/bin/sh", "-c", cmd)) ! myProcessLogger
+
+    val retCode =
+      // try {
+      stringSeqToProcess(Seq("/bin/sh", "-c", cmd)) ! myProcessLogger
+    // }
+    // catch {
+    //   case _: Throwable =>
+    //     println; println; println; println(cmd); println; println; println; println; println; println
+    //     println(cmd)
+    //     println(cmd)
+    //     println(cmd)
+    //     println(cmd)
+    //     println(cmd)
+    //     println(cmd)
+    //     println; println; println; println(cmd); println; println; println; println; println; println
+    //     println; println; println; println(cmd); println; println; println; println; println; println
+    //     println; println; println; println(cmd); println; println; println; println; println; println
+    //     System.exit(2)
+    //     1
+    // }
     (retCode, x.result())
- }
+  }
 }
 
 import CommonLogics._
@@ -50,13 +79,13 @@ object LLVMBerryLogics {
   val NOT_PLAINS: List[String] = s"src.ll tgt.ll $OUT_NAME.ll".split(" ").toList
   val OPT_OPTION = "-O2"
 
-  def get_ll_bases(dir_name: String) = {
+  def get_ll_bases(dir_name: String): List[String] = {
     val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
       val y = x.split('.')
       // MUST split with '.', not "."
       // or it is matched to wild card or something
       y.size >= 2 && NOT_PLAINS.contains(y.takeRight(2).mkString("."))}.
-      map(remove_one_extension(_))
+      map(remove_extensions(1))
     Random.shuffle(ret.toList)
     // def recursive_list_files(f: File): Array[File] = {
     //   val these = f.listFiles
@@ -72,14 +101,13 @@ object LLVMBerryLogics {
     // ) yield f.getAbsolutePath().split('.').dropRight(1).mkString(".")
   }
 
-  def remove_one_extension(x: String): String =
-    x.split('.').dropRight(1).mkString(".")
+  def remove_extensions(n: Int)(x: String): String =
+    x.split('.').dropRight(n).mkString(".")
 
-  def get_triple_bases(ll_base: String) = {
-    // val base = remove_one_extension(ll_base)
-    // println(base)
-    // println(ll_base)
-    exec(s"ls ${ll_base}.*.*.src.bc")
+  def get_triple_bases(ll_base: String): List[String] = {
+    val t = exec(s"ls ${ll_base}.*.*.src.bc")
+    if(t._1 == 0) t._2.split("\n").map(remove_extensions(2)).toList
+    else List()
   }
 
   // #foo -> foo.func.0, foo.func.1, foo.func.2 ...
@@ -103,11 +131,45 @@ object LLVMBerryLogics {
     val hint = triple_base + ".hint.json"
     val src = triple_base + ".src.bc"
     val tgt = triple_base + ".tgt.bc"
-    val cmd = s"${SIMPLBERRY_DIR}/../ocaml_refact/main.native #{src} #{tgt} #{hint}"
+    val cmd = s"${SIMPLBERRY_DIR}/ocaml_refact/main.native ${src} ${tgt} ${hint}"
     exec(cmd)
   }
 
-  def which_opt = ???
+  def parseGenerateResult(x: (Int, String)): String = {
+    if(x._1 == 0) "generate_success"
+    else "generate_fail"
+  }
+
+  def parseValidateResult(x: (Int, String)): String = {
+    def f(y: String) = x._2.contains(y)
+
+    // println(x._2)
+    if(f("Validation failed.")) "validation fail"
+    else if(f("Validation succeeded.")) "validation succeed"
+    else "validation unknown"
+  }
+  // def classify_result(result)
+  //   if ($?.success?) && result["Validation failed."]
+  //   then
+  //     raise "process succeeded, but validation says it failed"
+  //   end
+
+  //   return :validation_admitted if result["Validation Admitted."]
+  //   return :assertion_failed if result["Assertion failed."]
+  //   return :validation_not_supported if (result["Not_Supported"] or result["not supported"])
+  //   return :validation_failed if result["Validation failed."]
+  //   return :validation_success if result["Validation succeeded."]
+  //   return :validation_unknown
+  // end
+
+
+  def whichOpt(triple_base: String): String = {
+    val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
+    val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
+    json.get("opt_name").get.asInstanceOf[String]
+    //exception handling?
+  }
+
 
   // def compile
   // cur_dir = run("pwd").chop
@@ -132,17 +194,9 @@ object LLVMBerryLogics {
 object MainScript extends App {
   val GQ = new ConcurrentLinkedQueue[String]
   val VQ = new ConcurrentLinkedQueue[String]
-  // var GQ_processed = new AtomicInteger(0)
-  // var GQ_processed = 0
 
-  // val GQR = new AtomicReference(List[JobResult]())
-  // val VQR = new AtomicReference(List[JobResult]())
-  var GQR = scala.collection.mutable.Queue[JobResult]()
-  var VQR = scala.collection.mutable.Queue[JobResult]()
-  // listbuffer? arraybuffer?
-
-  // val GQR = new ConcurrentLinkedQueue[WorkResult]()
-  // val VQR = new ConcurrentLinkedQueue[WorkResult]()
+  var GQR = scala.collection.mutable.Queue[GQJobResult]()
+  var VQR = scala.collection.mutable.Queue[VQJobResult]()
 
   LLVMBerryLogics.get_ll_bases(
     "/home/youngju.song/myopt/simplberry_8.5" +
@@ -161,23 +215,36 @@ object MainScript extends App {
   case object Terminate extends Job
   // just Option Boolean?
 
-  class JobResult (
-    val FileSize: Long,
-    val Time: Double,
-    val Generated: Option[Int]
-  ) {} //without val, it is private
+  abstract class JobResult {
+    val fileSize: Long
+    val time: Double
+    val exitResult: String
+  } //without val, it is private
+
+  class GQJobResult(
+    val fileSize: Long,
+    val time: Double,
+    val generated: Int,
+    val exitResult: String
+  ) extends JobResult
+
+  class VQJobResult(
+    val fileSize: Long,
+    val time: Double,
+    val optName: String,
+    val exitResult: String
+  ) extends JobResult
 
   var count = 0
 
   def fetchNextJob: Job = {
-    // MainScript.synchronized {
     val GQ_total_time_elapsed =
-      GQR.foldLeft(0.0)((s, i) => s + i.Time)
+      GQR.foldLeft(0.0)((s, i) => s + i.time)
     val VQ_total_time_elapsed =
-      VQR.foldLeft(0.0)((s, i) => s + i.Time)
+      VQR.foldLeft(0.0)((s, i) => s + i.time)
 
     var VQ_estimated_total: Double = {
-      val num_generated = GQR.foldLeft(0)((s, i) => s + i.Generated.get)
+      val num_generated = GQR.foldLeft(0)((s, i) => s + i.generated)
       1.0 * num_generated * GQ_total / GQR.size
     }
 
@@ -190,24 +257,26 @@ object MainScript extends App {
 
     val VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
 
-    // }
-
     count += 1
     if(count % 50 == 0) {
       // println(GQ_estimated_ETA + " " + VQ_estimated_ETA)
       // println(
-      //   GQR.foldLeft(0)((s, i) => s + i.Generated.get) + " " +
+      //   GQR.foldLeft(0)((s, i) => s + i.generated.get) + " " +
       //     GQ_total + " " +
       //     GQR.size
       // )
       // print(s"${CSI}1A")
       // print("\r")
       System.out.print("\33[1A\33[2K");
+      System.out.print("\33[1A\33[2K");
+      System.out.print("\33[1A\33[2K");
       // print("#{CSI}1A")
       // print("\r")
       // print("#{CSI}1A")
       // print("\r")
 
+      println(GQR.size + "/" + GQ_total)
+      println(VQR.size + "/" + VQ_estimated_total)
       println("####" + VQ_current_total + " " + VQ_estimated_total)
 
 
@@ -217,76 +286,52 @@ object MainScript extends App {
       // println("GQ : " + GQ.size + ", GQR : " + GQR.size + "/" + GQ_total)
       // println("VQ : " + VQ.size + ", VQR : " + VQR.size + "/" + VQ_total)
     }
-    if(GQR.size == GQ_total && VQR.size == VQ_current_total) return Terminate
-
-
-    def tryGQ: Job = {
-      val bb = Option(GQ.poll)
-      if(bb.isDefined) GQJob(bb.get)
-      else Nothing
-    }
-
-    def tryVQ: Job = {
-      val bb = Option(VQ.poll)
-      if(bb.isDefined) VQJob(bb.get)
-      else Nothing
-    }
-
-    var ret: Job =
-      if(GQ_estimated_ETA > VQ_estimated_ETA)
-        tryGQ
-      else
-        tryVQ
-
-    if(ret == Nothing) ret = tryGQ
-    if(ret == Nothing) ret = tryVQ
-    ret
-    // ret = {
-    //   if(ret == Nothing) tryGQ
-    //   else ret
-    // }
-    // if(ret == Nothing)
-    //   ret = tryVQ
-    // else {
-    //   val ret2 = Option(VQ.poll)
-    //   if(ret2.isDefined) VQJob(ret2.get)
-    //   else Nothing
-    // }
-  }
-
-  def processGQ(ll_base: String): JobResult = {
-    val t0 = System.currentTimeMillis
-    val FileSize = (new File(ll_base + ".ll")).length
-    try {
-      val res = LLVMBerryLogics.generate(ll_base)
-      val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
-      if(tri_bases._1 == 0) {
-        for(tri_base <- tri_bases._2.split("\n")) {
-          VQ.offer(tri_base)
-        }
-        MainScript.synchronized { VQ_current_total += tri_bases._2.split("\n").size }
+    if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
+    else {
+      def tryGQ: Job = {
+        val bb = Option(GQ.poll)
+        if(bb.isDefined) GQJob(bb.get)
+        else Nothing
       }
-      val t1 = System.currentTimeMillis
-      val gens = if(tri_bases._1 == 0) Some(tri_bases._2.split("\n").size) else Some(0)
-      // println(tri_bases._2.split("\n"))
-      // println("GENS -------------" + gens)
-      new JobResult(FileSize, (t1 - t0)/1000.0, gens)
-    }
-    catch {
-      case e: Throwable =>
-        println("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE " + e)
-        val t1 = System.currentTimeMillis
-        new JobResult(FileSize, (t1 - t0)/1000.0, None)
+
+      def tryVQ: Job = {
+        val bb = Option(VQ.poll)
+        if(bb.isDefined) VQJob(bb.get)
+        else Nothing
+      }
+
+      var ret: Job =
+        if(GQ_estimated_ETA > VQ_estimated_ETA)
+          tryGQ
+        else
+          tryVQ
+
+      if(ret == Nothing) ret = tryGQ
+      if(ret == Nothing) ret = tryVQ
+      ret
     }
   }
 
-  def processVQ(triple_base: String): JobResult = {
+  def processGQ(ll_base: String): GQJobResult = {
     val t0 = System.currentTimeMillis
-    val FileSize = (new File(triple_base + ".ll")).length
-    val res = LLVMBerryLogics.validate(triple_base)
-    // println(res._1)
+    val fileSize = (new File(ll_base + ".ll")).length
+    val res = LLVMBerryLogics.generate(ll_base)
+    val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
+    tri_bases.foreach(VQ.offer(_))
+    MainScript.synchronized { VQ_current_total += tri_bases.size }
     val t1 = System.currentTimeMillis
-    new JobResult(FileSize, (t1 - t0)/1000.0, None)
+    val exitRes = LLVMBerryLogics.parseGenerateResult(res)
+    new GQJobResult(fileSize, (t1 - t0)/1000.0, tri_bases.size, exitRes)
+  }
+
+  def processVQ(triple_base: String): VQJobResult = {
+    val t0 = System.currentTimeMillis
+    val fileSize = (new File(triple_base + ".ll")).length
+    val res = LLVMBerryLogics.validate(triple_base)
+    val optName = LLVMBerryLogics.whichOpt(triple_base)
+    val t1 = System.currentTimeMillis
+    val exitRes = LLVMBerryLogics.parseValidateResult(res)
+    new VQJobResult(fileSize, (t1 - t0)/1000.0, optName, exitRes)
   }
 
   class MyThread extends Thread {
@@ -316,51 +361,34 @@ object MainScript extends App {
       thread
     }
   threads.foreach(_.join)
-  // GQR.foreach(i => println(i.FileSize + "\t" + i.Time + "\t" + i.Generated.get))
+  // GQR.foreach(i => println(i.fileSize + "\t" + i.time + "\t" + i.generated.get))
+  println(GQ_total + " " + VQ_current_total)
+  var table: Map[String, Map[String, Int]] =
+    Map()
+    // Map[String, Map[String, Int]]().withDefaultValue(
+    //   // new scala.collection.mutable.HashMap[String, Int]()
+    //   Map[String, Int]().withDefaultValue(0)
+    // )
+    // new Map[String, Map[String, Int]]()
+    //   { override def default(key: String) = Map() }
+  VQR.foreach{i =>
+    // table(i.optName)(i.exitResult) += 1
+    var t = table.getOrElse(i.optName, Map())
+    val tt = t.getOrElse(i.exitResult, 0) + 1
+    table.update(i.optName, t.updated(i.exitResult, tt))
+  }
+  // PAR MAP?
+  // table("A")("B") = 2
+  println(table.size)
+  println(table.keys)
+  println(table)
+  table.foreach(println(_))
+  // VQR.par.foreach(i => table.updated(i.optName, )
   assert(GQ.size == 0 && GQR.size == GQ_total)
   assert(VQ.size == 0 && VQR.size == VQ_current_total)
 }
 
-// object Runner {
-//   private val x = new AtomicReference(List[String]())
-//   val GQ = new ConcurrentLinkedQueue[Int]()
-//   val VQ = new ConcurrentLinkedQueue[Int]()
-//   type t = List[_]
-//   type l = java.util.Queue[_]
-//   var a = 0
-
-//   for (i <- 1 to 10) GQ.offer(i)
-//   println(GQ)
-//   val threads: IndexedSeq[Thread] =
-//     for (i <- 1 to 24) yield {
-//       val thread = new Thread {
-//         override def run {
-
-//           import ProcessBuilder._
-//           val tmp = stringToProcess("ls -al").!
-//           val ttt = (stringToProcess("ls -al")).!!
-//           println(ttt)
-
-
-//           // val result: Process = Process("ls -al")
-//           // println(result)
-//           val z = Option(GQ.poll)
-//           if(z.isDefined) VQ.offer(z.get)
-//           val n = Random.nextInt() / 100
-//           a = a + n
-//           // println(z)
-//           println(GQ.size + " " + VQ.size)
-//           // println(GQ)
-//           Thread.sleep(500)
-//           a = a - n
-//         }
-//       }
-//       thread.start
-//       thread
-//       // Thread.sleep(50) // slow the loop down a bit
-//     }
-//   threads.foreach(_.join)
-//   println(a)
-// }
-
+println
+println
+println
 MainScript.main(args)
