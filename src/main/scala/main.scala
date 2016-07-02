@@ -54,6 +54,18 @@ object CommonLogics {
 import CommonLogics._
 
 object LLVMBerryLogics {
+  sealed class GResult
+  case object GSuccess extends GResult
+  case object GFail extends GResult
+
+  sealed class VResult
+  case object VSuccess extends VResult
+  case object VFail extends VResult
+  case object VAdmitted extends VResult
+  case object VAssertionFail extends VResult
+  case object VNotSupported extends VResult
+  case object VUnknown extends VResult
+
   // val SIMPLBERRY_DIR = "/home/youngju.song/myopt/simplberry_8.5"
   val SIMPLBERRY_DIR = "/home/youngju.song/myopt/_simplberry"
   val opt_path = SIMPLBERRY_DIR + "/.build/llvm-obj/bin/opt"
@@ -123,24 +135,24 @@ object LLVMBerryLogics {
     exec(cmd)
   }
 
-  def classifyGenerateResult(x: (Int, String, String)): String = {
-    if(x._1 == 0) "Success"
-    else "Fail"
+  def classifyGenerateResult(x: (Int, String, String)): GResult = {
+    if(x._1 == 0) GSuccess
+    else GFail
   }
 
-  def classifyValidateResult(x: (Int, String, String)): String = {
+  def classifyValidateResult(x: (Int, String, String)): VResult = {
     def f(y: String) = x._3.split('\n').head.contains(y)
 
-    if(f("Validation failed.")) "Fail"
-    else if(f("Validation succeeded.")) "Success"
-    else if(f("Validation Admitted.")) "Admitted"
-    else if(f("Assertion failed.")) "Assertion Fail"
+    if(f("Validation failed.")) VFail
+    else if(f("Validation succeeded.")) VSuccess
+    else if(f("Validation Admitted.")) VAdmitted
+    else if(f("Assertion failed.")) VAssertionFail
     else if(f("Fatal error: exception Failure") &&
-      (f("Not_Supported") || f("is not supported for now."))) "Not Supported"
-    else if(f("llvm-obj/bindings/ocaml/llvm/llvm_ocaml.c:1388: llvm_instr_get_opcode: Assertion `o <= LLVMLandingPad' failed."))
-      "Ocaml Binding Fail"
+      (f("Not_Supported") || f("is not supported for now."))) VNotSupported
+    // else if(f("llvm-obj/bindings/ocaml/llvm/llvm_ocaml.c:1388: llvm_instr_get_opcode: Assertion `o <= LLVMLandingPad' failed."))
+    //   "Ocaml Binding Fail"
     else
-      "Unknown"
+      VUnknown
   }
 
   def getOptName(triple_base: String): String = {
@@ -170,24 +182,24 @@ object MainScript extends App {
   case object Terminate extends Job
   // just Option Boolean?
 
-  abstract class JobResult {
+  sealed abstract class JobResult {
     val fileSize: Long
     val time: Double
-    val classifiedResult: String
+    // val classifiedResult: String
   } //without val, it is private
 
   class GQJobResult(
     val fileSize: Long,
     val time: Double,
     val generated: Int,
-    val classifiedResult: String
+    val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult
 
   class VQJobResult(
     val fileSize: Long,
     val time: Double,
     val optName: String,
-    val classifiedResult: String
+    val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult
 
   var count = 0
@@ -327,7 +339,7 @@ object MainScript extends App {
   printVQRSimple
   println ; println ; printBar()
 
-  def printRow(row_name: String)(table: Map[String, Int]) = {
+  def printRow[A](row_name: String)(table: Map[A, Int]) = {
     print(row_name.padTo(20, ' ') + " ---->   ")
     table.foreach(y => print((if(y._2 != 0) y.toString else "").padTo(20, ' ') + " "))
     println
@@ -337,8 +349,8 @@ object MainScript extends App {
     // }
 
   def printGQR = {
-    val table: Map[String, Int] =
-      new scala.collection.immutable.HashMap[String, Int]().
+    val table: Map[LLVMBerryLogics.GResult, Int] =
+      new scala.collection.immutable.HashMap[LLVMBerryLogics.GResult, Int]().
         withDefaultValue(0)
     val table_filled = GQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
@@ -347,14 +359,18 @@ object MainScript extends App {
   }
 
   def printVQR = {
-    val table: Map[String, Map[String, Int]] =
-      new scala.collection.immutable.HashMap[String, Map[String, Int]]().
+    val table: Map[String, Map[LLVMBerryLogics.VResult, Int]] =
+      new scala.collection.immutable.HashMap[String, Map[LLVMBerryLogics.VResult, Int]]().
         withDefaultValue(
           // new scala.collection.immutable.HashMap[String, Int]().
           //   withDefaultValue(0)
-          Map() + (("Success", 0)) + (("Fail", 0)) + (("Not Supported", 0)) +
-            (("Admitted", 0)) + (("Assertion Fail", 0)) +
-            (("Ocaml Binding Fail", 0)) + (("Unknown", 0)))
+          new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
+            ((LLVMBerryLogics.VSuccess, 0)) +
+            ((LLVMBerryLogics.VFail, 0)) +
+            ((LLVMBerryLogics.VNotSupported, 0)) +
+            ((LLVMBerryLogics.VAdmitted, 0)) +
+            ((LLVMBerryLogics.VAssertionFail, 0)) +
+            ((LLVMBerryLogics.VUnknown, 0)))
 
     val table_filled = VQR.foldLeft(table){(s, i) =>
       val trans = s(i.optName).updated(
@@ -367,8 +383,8 @@ object MainScript extends App {
   }
 
   def printVQRSimple = {
-    val table: Map[String, Int] =
-      new scala.collection.immutable.HashMap[String, Int]().
+    val table: Map[LLVMBerryLogics.VResult, Int] =
+      new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]().
         withDefaultValue(0)
     val table_filled = VQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
