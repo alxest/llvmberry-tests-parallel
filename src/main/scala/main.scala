@@ -54,14 +54,17 @@ object CommonLogics {
 import CommonLogics._
 
 object LLVMBerryLogics {
-  val SIMPLBERRY_DIR = "/home/youngju.song/myopt/simplberry_8.5"
+  // val SIMPLBERRY_DIR = "/home/youngju.song/myopt/simplberry_8.5"
+  val SIMPLBERRY_DIR = "/home/youngju.song/myopt/_simplberry"
+  val opt_path = SIMPLBERRY_DIR + "/.build/llvm-obj/bin/opt"
+  val main_native_path = s"${SIMPLBERRY_DIR}/ocaml_refact/main.native"
   val OUT_NAME = "output"
   val NOT_PLAINS: List[String] = s"src.ll tgt.ll $OUT_NAME.ll".split(" ").toList
   val OPT_OPTION = "-instcombine" //"-O2"
-  val testDir = "/home/youngju.song/myopt/simplberry_8.5" +
+  val testDir = SIMPLBERRY_DIR + // "/home/youngju.song/myopt/simplberry_8.5" +
   "/simplberry-tests" +
-  "/programs_new"
-  // "/llvm_regression_tests"
+  // "/programs_new"
+  "/llvm_regression_tests"
 
   def get_ll_bases(dir_name: String): List[String] = {
     val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
@@ -91,7 +94,7 @@ object LLVMBerryLogics {
   }
 
   def compile = {
-    val generator_compile = exec(s"cd ${SIMPLBERRY_DIR}/.build/llvm-obj && cmake --build . -- opt -j24")
+    val generator_compile = exec(s"cd ${SIMPLBERRY_DIR}/ && make opt -j24")
     if(generator_compile._1 != 0) {
       println("Compile Failed!")
       println("stdout : " + generator_compile._2)
@@ -108,7 +111,7 @@ object LLVMBerryLogics {
   }
 
   def generate(ll_base: String) = {
-    val cmd = s"opt ${OPT_OPTION} ${ll_base}.ll -o ${ll_base}.${OUT_NAME}.ll -S"
+    val cmd = s"s{opt_path} ${OPT_OPTION} ${ll_base}.ll -o ${ll_base}.${OUT_NAME}.ll -S"
     exec(cmd)
   }
 
@@ -116,7 +119,7 @@ object LLVMBerryLogics {
     val hint = triple_base + ".hint.json"
     val src = triple_base + ".src.bc"
     val tgt = triple_base + ".tgt.bc"
-    val cmd = s"${SIMPLBERRY_DIR}/ocaml_refact/main.native ${src} ${tgt} ${hint}"
+    val cmd = s"${main_native_path} ${src} ${tgt} ${hint}"
     exec(cmd)
   }
 
@@ -210,7 +213,7 @@ object MainScript extends App {
     val VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
 
     count += 1
-    if(count % 1 == 0) {
+    if(count % 50 == 0) {
       MainScript.synchronized {
         TimeChecker.runWithClock("Print") {
           (1 to 6) foreach { _ => goPreviousLine }
@@ -324,8 +327,9 @@ object MainScript extends App {
   printVQRSimple
   println ; println ; printBar()
 
-  def printMap(table: Map[String, Int]) = {
-    table.foreach{x => print(x) + "\t"}
+  def printRow(row_name: String)(table: Map[String, Int]) = {
+    print(row_name.padTo(20, ' ') + " ---->   ")
+    table.foreach(y => print((if(y._2 != 0) y.toString else "").padTo(20, ' ') + " "))
     println
   }
     // table.foreach{x =>
@@ -339,7 +343,7 @@ object MainScript extends App {
     val table_filled = GQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
     }
-    printMap(table_filled)
+    printRow("All Generation")(table_filled)
   }
 
   def printVQR = {
@@ -359,11 +363,7 @@ object MainScript extends App {
       s.updated(i.optName, trans)
     }
 
-    table_filled.foreach{x =>
-      print(x._1.padTo(20, ' ') + " ----> ")
-      x._2.foreach(y => print((if(y._2 != 0) y.toString else "").padTo(25, ' ') + " "))
-      println
-    }
+    table_filled.foreach{x => printRow(x._1)(x._2)}
   }
 
   def printVQRSimple = {
@@ -373,7 +373,7 @@ object MainScript extends App {
     val table_filled = VQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
     }
-    printMap(table_filled)
+    printRow("All Validation")(table_filled)
   }
 }
 
