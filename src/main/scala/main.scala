@@ -461,53 +461,112 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
 
 //http://stackoverflow.com/questions/2315912/scala-best-way-to-parse-command-line-parameters-cli
 object MainScript {
-  val usage = """
-Options
--i [path]:
-    Set input test directory.
--o [path]:
-    Set resulting output directory.
-    In default, automatically makes new directory in current directory.
--s ["g"|"v"|"d"]:
-    Set thread processing strategy.
-    "g" means try generate first.
-    "v" means try validate first.
-    "d" means default, balancing according to estimated time left.
--opt [option]:
-    Set opt option.
-    Default value is O2.
-  """
-  def parseOption(args: Array[String]) {
-    val arglist = args.toList
-    type OptionMap = Map[Symbol, Any]
 
-    def nextOption(map : OptionMap, list: List[String]) : OptionMap = {
+  //http://stackoverflow.com/questions/9725675/is-there-a-standard-format-for-command-line-shell-help-text
+  //http://docopt.org/
+  val usage = """
+Usage:
+
+-s, --simplberry-path <path>:
+    Set simplberry directory path.
+    Default is set to ../, assuming this script is inside simplberry-tests dir.
+    *NOTE*
+    This path is used to get --opt-path and --vali-path.
+    You should not specify this with --opt-path or --vali-path at the same time.
+
+--opt-path <path>:
+    Set path of the "opt".
+    *NOTE*
+    By specifying this value, it will not get commit/patch info of lib/llvm.
+    Which means the test result will not be self-contained.
+    Re-constructing the same setting just from the test result will not be able.
+
+--vali-path <path>:
+    Set path of the validator, "main.native".
+    *NOTE*
+    By specifying this value, it will not get commit/patch info of lib/llvm.
+    Which means the test result will not be self-contained.
+    Re-constructing the same setting just from the test result will not be able.
+
+-a, --opt-arg <string>:
+    Set parameter used in opt.
+    Default value is O2.
+
+-i, --input-path <path>:
+    Set input test directory.
+
+-o, --output-path <path>:
+    Set resulting output directory.
+    In default, directory is automatically created inside current directory.
+
+-p, --process-strategy <g|v|d>:
+    Set job processing strategy.
+    "g": try generate(opt) first.
+    "v": try validate(main.native) first.
+    "d": default, balancing according to estimated time left.
+    Default value is "d".
+
+-g, --generate-strategy:
+    Not yet implemented.
+    If we are interested in specific pass, running entire O2 with our opt is
+    not that meaningfull.
+    As it is not stabilized yet, it may cause assertion failure.
+    Also it takes far more time writing all the triples.
+    Therefore, it would be good to run all passes that appear earlier than
+    "the pass" with basic LLVM opt, and then run "the pass" with our opt.
+
+-v, --validate-strategy <f|s|d>:
+    Set validating strategy.
+    "f": Fast. Always run without "-d" option.
+    "s": Slow. Always run with "-d" option, and llvm-dis to src/tgt.
+    "d": First try with "f" strategy, and then if validation has not succeeded,
+         re-run with "s" strategy.
+    Default value is "d"
+  """
+  //TODO llvm-dis path?
+
+  def parse_option(args: Array[String]) {
+    type option_map = Map[Symbol, Any]
+    def nextOption(map : option_map, list: List[String]) : option_map = {
       list match {
         case Nil => map
         case "-h" :: _ =>
           println(usage)
           System.exit(0)
           ???
-        case "-i" :: value :: tail =>
-          nextOption(map ++ Map('i -> value), tail)
-        case "-o" :: value :: tail =>
-          nextOption(map ++ Map('o -> value), tail)
-        case "-s" :: value :: tail =>
+        case ("-s" | "--simplberry-path") :: value :: tail =>
           nextOption(map ++ Map('s -> value), tail)
-        case "-opt" :: value :: tail =>
-          nextOption(map ++ Map('opt -> value), tail)
-        case option :: tail =>
+        case "--opt-path"  :: value :: tail =>
+          nextOption(map ++ Map('optpath -> value), tail)
+        case "--vali-path"  :: value :: tail =>
+          nextOption(map ++ Map('valipath-> value), tail)
+        case ("-a" | "--opt-arg") :: value :: tail =>
+          nextOption(map ++ Map('a -> value), tail)
+        case ("-i" | "--input-path") :: value :: tail =>
+          nextOption(map ++ Map('i -> value), tail)
+        case ("-o" | "--output-path") :: value :: tail =>
+          nextOption(map ++ Map('o -> value), tail)
+        case ("-p" | "--process-strategy") :: value :: tail =>
+          nextOption(map ++ Map('p -> value), tail)
+        case ("-g" | "--generate-strategy") :: value :: tail =>
+          println("Not implemented yet : -g")
+          System.exit(1)
+          ???
+        case ("-v" | "--validate-strategy") :: value :: tail =>
+          nextOption(map ++ Map('v -> value), tail)
+        case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
           ???
       }
     }
-    val options = nextOption(Map(),arglist)
-    println(options)
+    // val bb = ("-s" | "--simplberry-path") --> error
+    // "|" seems correctly interpreted
+    nextOption(Map(), args.toList)
   }
 
   def main(args: Array[String]) = {
-    parseOption(args)
+    val option_map = parse_option(args)
     println(LLVMBerryLogics.resultDir)
     exec(s"cp -R ${LLVMBerryLogics.testDir} ${LLVMBerryLogics.resultDir}")
     val runner = new TestRunner(LLVMBerryLogics.get_ll_bases(LLVMBerryLogics.resultDir), 24)
