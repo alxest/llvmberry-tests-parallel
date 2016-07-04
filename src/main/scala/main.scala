@@ -76,8 +76,19 @@ object LLVMBerryLogics {
   val testDir = SIMPLBERRY_DIR + // "/home/youngju.song/myopt/simplberry_8.5" +
   "/simplberry-tests" +
   // "/programs_new"
-  // "/llvm_regression_tests"
-  "/speccpu2006-ll"
+  "/llvm_regression_tests"
+  // "/speccpu2006-ll"
+  val resultDir = {
+    val ls = exec("ls")._2.split('\n')
+    val y = testDir.split('/').last
+    def go(i: Int): String = {
+      val x = "test_result#" + y + "#" + i
+      if(ls.contains(x))
+        go(i+1)
+      else x
+    }
+    go(0)
+  }
 
   def get_ll_bases(dir_name: String): List[String] = {
     val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
@@ -164,24 +175,13 @@ object LLVMBerryLogics {
   }
 }
 
-object MainScript extends App {
-  val GQ = new ConcurrentLinkedQueue[String]
-  val VQ = new ConcurrentLinkedQueue[String]
-
-  var GQR = scala.collection.mutable.Queue[GQJobResult]()
-  var VQR = scala.collection.mutable.Queue[VQJobResult]()
-
-  LLVMBerryLogics.get_ll_bases(LLVMBerryLogics.testDir).foreach(GQ.offer(_))
-  println(GQ.size)
-  val GQ_total = GQ.size
-  var VQ_current_total = 0
-
+class TestRunner(val ll_bases: List[String], val num_threads: Int) {
+  object Mutex
   sealed abstract class Job
   case class GQJob(val ll_base: String) extends Job
   case class VQJob(val triple_base: String) extends Job
   case object Nothing extends Job
   case object Terminate extends Job
-  // just Option Boolean?
 
   sealed abstract class JobResult {
     val fileSize: Long
@@ -203,42 +203,31 @@ object MainScript extends App {
     val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult
 
-  var count = 0
+
+  val GQ = new ConcurrentLinkedQueue[String]
+  val VQ = new ConcurrentLinkedQueue[String]
+
+  var GQR = scala.collection.mutable.Queue[GQJobResult]()
+  var VQR = scala.collection.mutable.Queue[VQJobResult]()
+
+  var GQ_total = 0
+  var VQ_current_total = 0
+  def VQ_estimated_total: Double = {
+    val num_generated = GQR.foldLeft(0)((s, i) => s + i.generated)
+    num_generated * Math.pow((1.0 * GQ_total / GQR.size), 1.3)
+  }
+  def GQ_total_time_elapsed =
+    GQR.foldLeft(0.0)((s, i) => s + i.time)
+  def VQ_total_time_elapsed =
+    VQR.foldLeft(0.0)((s, i) => s + i.time)
+  def GQ_estimated_single_time = GQ_total_time_elapsed / GQR.size
+  def VQ_estimated_single_time = VQ_total_time_elapsed / VQR.size
+  def GQ_estimated_ETA = GQ_estimated_single_time * (GQ_total - GQR.size)
+  def VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
+
+  // var count = 0
 
   def fetchNextJob: Job = {
-    val GQ_total_time_elapsed =
-      GQR.foldLeft(0.0)((s, i) => s + i.time)
-    val VQ_total_time_elapsed =
-      VQR.foldLeft(0.0)((s, i) => s + i.time)
-
-    var VQ_estimated_total: Double = {
-      val num_generated = GQR.foldLeft(0)((s, i) => s + i.generated)
-      num_generated * Math.pow((1.0 * GQ_total / GQR.size), 1.3)
-    }
-
-    val GQ_estimated_single_time = GQ_total_time_elapsed / GQR.size
-
-    val VQ_estimated_single_time = VQ_total_time_elapsed / VQR.size
-
-    val GQ_estimated_ETA = GQ_estimated_single_time * (GQ_total - GQR.size)
-    // val GQ_estimated_ETA = GQ_estimated_single_time * GQ.size
-
-    val VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
-
-    count += 1
-    if(count % 50 == 0) {
-      MainScript.synchronized {
-        TimeChecker.runWithClock("Print") {
-          (1 to 6) foreach { _ => goPreviousLine }
-          println(GQR.size + "/" + GQ_total)
-          println(VQR.size + "/" + VQ_estimated_total)
-          println("####" + VQ_current_total + " " + VQ_estimated_total)
-          printGQR
-          printVQRSimple
-        }
-        println(TimeChecker.data)
-      }
-    }
     if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
     else {
       def tryGQ: Job = {
@@ -272,7 +261,7 @@ object MainScript extends App {
       val res = LLVMBerryLogics.generate(ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
-      MainScript.synchronized { VQ_current_total += tri_bases.size }
+      Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
       val exitRes = LLVMBerryLogics.classifyGenerateResult(res)
       if(exitRes != LLVMBerryLogics.GSuccess) {
@@ -301,61 +290,48 @@ object MainScript extends App {
 
   class MyThread extends Thread {
     override def run {
-      def runner: Unit = {
+      def runner(): Unit = {
+        printBrief
         fetchNextJob match {
           case GQJob(ll_base) =>
             val res = processGQ(ll_base)
-            MainScript.synchronized { GQR += res }
+            Mutex.synchronized { GQR += res }
             runner
           case VQJob(triple_base) =>
             val res = processVQ(triple_base)
-            MainScript.synchronized { VQR += res }
+            Mutex.synchronized { VQR += res }
             runner
           case Nothing => Thread.sleep(2000) ; runner
           case Terminate => ()
         }
       }
-      runner
+      runner()
     }
   }
 
-  println ; println ; printBar()
-  println("Start Script")
-  LLVMBerryLogics.compile
-  println("Compile Done")
-  LLVMBerryLogics.cleanByProducts
-  println("cleanByProducts Done")
-  for(i <- 1 to 12) println
-  val threads: IndexedSeq[Thread] =
-    for (i <- 1 to 24) yield {
-      val thread = new MyThread 
-      thread.start
-      thread
-    }
-  threads.foreach(_.join)
-  for(i <- 1 to 8) println
-  println("Test Done")
+  var last_printed: Long = 0
 
-  // GQR.foreach(i => println(i.fileSize + "\t" + i.time + "\t" + i.generated.get))
-  println(GQ_total + " " + VQ_current_total)
-  assert(GQ.size == 0 && GQR.size == GQ_total)
-  assert(VQ.size == 0 && VQR.size == VQ_current_total)
-  println ; println ; printBar()
-  printGQR
-  println ; println ; printBar()
-  printVQR
-  println ; println ; printBar()
-  printVQRSimple
-  println ; println ; printBar()
+  def printBrief = Mutex.synchronized {
+    TimeChecker.runWithClock("printBrief") {
+      val t0 = System.currentTimeMillis()
+      if(t0 - last_printed > 250) {
+        last_printed = t0
+        (1 to 6) foreach { _ => goPreviousLine }
+        println(GQR.size + "/" + GQ_total)
+        println(VQR.size + "/" + VQ_estimated_total)
+        println("####" + VQ_current_total + " " + VQ_estimated_total)
+        printGQR
+        printVQRSimple
+        println(TimeChecker.data)
+      }
+    }
+  }
 
   def printRow[A](row_name: String)(table: Map[A, Int]) = {
     print(row_name.padTo(20, ' ') + " ---->   ")
     table.foreach(y => print((if(y._2 != 0) y.toString else "").padTo(20, ' ') + " "))
     println
   }
-    // table.foreach{x =>
-    //   println(x._1.padTo(20, ' ') + " ----> " + x._2)
-    // }
 
   def printGQR = {
     val table: Map[LLVMBerryLogics.GResult, Int] =
@@ -413,6 +389,44 @@ object MainScript extends App {
     }
     printRow("All Validation")(table_filled)
   }
+
+  def run = {
+    ll_bases.foreach(GQ.offer(_))
+    GQ_total = GQ.size
+    val threads: IndexedSeq[Thread] =
+      (for (i <- 1 to num_threads) yield {
+        val thread = new MyThread
+        thread.start
+        thread
+      })
+    threads.foreach(_.join)
+    assert(GQ.size == 0 && GQR.size == GQ_total)
+    assert(VQ.size == 0 && VQR.size == VQ_current_total)
+  }
+}
+
+object MainScript extends App {
+  println(LLVMBerryLogics.resultDir)
+  exec(s"cp -R ${LLVMBerryLogics.testDir} ${LLVMBerryLogics.resultDir}")
+  val runner = new TestRunner(LLVMBerryLogics.get_ll_bases(LLVMBerryLogics.resultDir), 24)
+  println ; println ; printBar()
+  println("Start Script")
+  LLVMBerryLogics.compile
+  println("Compile Done")
+  LLVMBerryLogics.cleanByProducts
+  println("cleanByProducts Done")
+  for(i <- 1 to 12) println
+  runner.run
+  for(i <- 1 to 8) println
+  println("Test Done")
+  println(runner.GQ_total + " " + runner.VQ_current_total)
+  println ; println ; printBar()
+  runner.printGQR
+  println ; println ; printBar()
+  runner.printVQR
+  println ; println ; printBar()
+  runner.printVQRSimple
+  println ; println ; printBar()
 }
 
 MainScript.main(args)
