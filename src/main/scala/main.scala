@@ -76,7 +76,8 @@ object LLVMBerryLogics {
   val testDir = SIMPLBERRY_DIR + // "/home/youngju.song/myopt/simplberry_8.5" +
   "/simplberry-tests" +
   // "/programs_new"
-  "/llvm_regression_tests"
+  // "/llvm_regression_tests"
+  "/speccpu2006-ll"
 
   def get_ll_bases(dir_name: String): List[String] = {
     val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
@@ -123,7 +124,7 @@ object LLVMBerryLogics {
   }
 
   def generate(ll_base: String) = {
-    val cmd = s"s{opt_path} ${OPT_OPTION} ${ll_base}.ll -o ${ll_base}.${OUT_NAME}.ll -S"
+    val cmd = s"${opt_path} ${OPT_OPTION} ${ll_base}.ll -o ${ll_base}.${OUT_NAME}.ll -S"
     exec(cmd)
   }
 
@@ -274,6 +275,14 @@ object MainScript extends App {
       MainScript.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
       val exitRes = LLVMBerryLogics.classifyGenerateResult(res)
+      if(exitRes != LLVMBerryLogics.GSuccess) {
+        import java.nio.file.{Paths, Files}
+        import java.nio.charset.StandardCharsets
+        val result = "########## STDOUT\n" + res._2 +
+        "\n\n\n ########## STDERR\n" + res._3
+
+        Files.write(Paths.get(ll_base + ".result"), result.getBytes(StandardCharsets.UTF_8))
+      }
       new GQJobResult(fileSize, (t1 - t0)/1000.0, tri_bases.size, exitRes)
     }
   }
@@ -359,18 +368,22 @@ object MainScript extends App {
   }
 
   def printVQR = {
+    val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
+    ((LLVMBerryLogics.VSuccess, 0)) +
+    ((LLVMBerryLogics.VFail, 0)) +
+    ((LLVMBerryLogics.VNotSupported, 0)) +
+    ((LLVMBerryLogics.VAdmitted, 0)) +
+    ((LLVMBerryLogics.VAssertionFail, 0)) +
+    ((LLVMBerryLogics.VUnknown, 0))
+
     val table: Map[String, Map[LLVMBerryLogics.VResult, Int]] =
       new scala.collection.immutable.HashMap[String, Map[LLVMBerryLogics.VResult, Int]]().
         withDefaultValue(
           // new scala.collection.immutable.HashMap[String, Int]().
           //   withDefaultValue(0)
-          new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
-            ((LLVMBerryLogics.VSuccess, 0)) +
-            ((LLVMBerryLogics.VFail, 0)) +
-            ((LLVMBerryLogics.VNotSupported, 0)) +
-            ((LLVMBerryLogics.VAdmitted, 0)) +
-            ((LLVMBerryLogics.VAssertionFail, 0)) +
-            ((LLVMBerryLogics.VUnknown, 0)))
+          VblankRow
+        )
+
 
     val table_filled = VQR.foldLeft(table){(s, i) =>
       val trans = s(i.optName).updated(
@@ -383,9 +396,18 @@ object MainScript extends App {
   }
 
   def printVQRSimple = {
-    val table: Map[LLVMBerryLogics.VResult, Int] =
-      new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]().
-        withDefaultValue(0)
+    val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
+    ((LLVMBerryLogics.VSuccess, 0)) +
+    ((LLVMBerryLogics.VFail, 0)) +
+    ((LLVMBerryLogics.VNotSupported, 0)) +
+    ((LLVMBerryLogics.VAdmitted, 0)) +
+    ((LLVMBerryLogics.VAssertionFail, 0)) +
+    ((LLVMBerryLogics.VUnknown, 0))
+
+    // val table: Map[LLVMBerryLogics.VResult, Int] =
+    //   new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]().
+    //     withDefaultValue(0)
+    val table = VblankRow
     val table_filled = VQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
     }
