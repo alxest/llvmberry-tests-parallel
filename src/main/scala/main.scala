@@ -67,6 +67,61 @@ import CommonLogics._
 
 
 
+class LLVMBerryLogics(
+  val simplberry_path: Option[String],
+  val opt_path: String,
+  val main_native_path: String,
+  val opt_arg: String,
+  val input_test_dir: String,
+  val output_result_dir: String) {
+
+  // it seems I cannot put some code here..
+  // def this(x: Map[Symbol, String]) = {
+  //   this("", "", "", "", "", "") 
+  // }
+
+  def compile = {
+    val generator_compile = exec(s"cd ${simplberry_path}/ && make opt -j24")
+    if(generator_compile._1 != 0) {
+      println("Compile Failed!")
+      println("stdout : " + generator_compile._2)
+      println("stderr : " + generator_compile._3)
+      assert(false)
+    }
+    val validator_compile = exec(s"cd ${simplberry_path}/ && make refact -j24")
+    if(validator_compile._1 != 0) {
+      println("Compile Failed!")
+      println("stdout : " + validator_compile._2)
+      println("stderr : " + validator_compile._3)
+      assert(false)
+    }
+  }
+
+  def generate(ll_base: String) = {
+    val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
+    s"-o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
+    exec(cmd)
+  }
+
+  def validate(triple_base: String, debug: Boolean) = {
+    val src = triple_base + ".src.bc"
+    val tgt = triple_base + ".tgt.bc"
+    val hint = triple_base + ".hint.json"
+    val cmd = s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
+    exec(cmd)
+  }
+
+  def cleanByProducts = {
+    ??? //this is deprecated, but leave it for now
+    exec(s"""cd ${input_test_dir} && find . -name "*.src.bc" -delete""")
+    exec(s"""cd ${input_test_dir} && find . -name "*.tgt.bc" -delete""")
+    exec(s"""cd ${input_test_dir} && find . -name "*.src.ll" -delete""")
+    exec(s"""cd ${input_test_dir} && find . -name "*.tgt.ll" -delete""")
+    exec(s"""cd ${input_test_dir} && find . -name "*.output.ll" -delete""")
+    exec(s"""cd ${input_test_dir} && find . -name "*.result" -delete""")
+  }
+}
+
 object LLVMBerryLogics {
   sealed class GResult
   case object GSuccess extends GResult
@@ -80,29 +135,8 @@ object LLVMBerryLogics {
   case object VNotSupported extends VResult
   case object VUnknown extends VResult
 
-  // val SIMPLBERRY_DIR = "/home/youngju.song/myopt/simplberry_8.5"
-  val SIMPLBERRY_DIR = "/home/youngju.song/myopt/simplberry"
-  val opt_path = SIMPLBERRY_DIR + "/.build/llvm-obj/bin/opt"
-  val main_native_path = s"${SIMPLBERRY_DIR}/ocaml_refact/main.native"
   val OUT_NAME = "output"
   val NOT_PLAINS: List[String] = s"src.ll tgt.ll $OUT_NAME.ll".split(" ").toList
-  val OPT_OPTION = "-instcombine" //"-O2"
-  val testDir = SIMPLBERRY_DIR + // "/home/youngju.song/myopt/simplberry_8.5" +
-  "/simplberry-tests" +
-  // "/programs_new"
-  "/llvm_regression_tests"
-  // "/speccpu2006-ll"
-  val resultDir = {
-    val ls = exec("ls")._2.split('\n')
-    val y = testDir.split('/').last
-    def go(i: Int): String = {
-      val x = "test_result#" + y + "#" + i
-      if(ls.contains(x))
-        go(i+1)
-      else x
-    }
-    go(0)
-  }
 
   def get_ll_bases(dir_name: String): List[String] = {
     val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
@@ -120,45 +154,6 @@ object LLVMBerryLogics {
     val t = exec(s"ls ${ll_base}.*.*.src.bc")
     if(t._1 == 0) t._2.split("\n").map(remove_extensions(2)).toList
     else List()
-  }
-
-  def cleanByProducts = {
-    exec(s"""cd ${testDir} && find . -name "*.src.bc" -delete""")
-    exec(s"""cd ${testDir} && find . -name "*.tgt.bc" -delete""")
-    exec(s"""cd ${testDir} && find . -name "*.src.ll" -delete""")
-    exec(s"""cd ${testDir} && find . -name "*.tgt.ll" -delete""")
-    exec(s"""cd ${testDir} && find . -name "*.output.ll" -delete""")
-    exec(s"""cd ${testDir} && find . -name "*.result" -delete""")
-  }
-
-  def compile = {
-    val generator_compile = exec(s"cd ${SIMPLBERRY_DIR}/ && make opt -j24")
-    if(generator_compile._1 != 0) {
-      println("Compile Failed!")
-      println("stdout : " + generator_compile._2)
-      println("stderr : " + generator_compile._3)
-      assert(false)
-    }
-    val validator_compile = exec(s"cd ${SIMPLBERRY_DIR}/ && make refact -j24")
-    if(validator_compile._1 != 0) {
-      println("Compile Failed!")
-      println("stdout : " + validator_compile._2)
-      println("stderr : " + validator_compile._3)
-      assert(false)
-    }
-  }
-
-  def generate(ll_base: String) = {
-    val cmd = s"${opt_path} ${OPT_OPTION} ${ll_base}.ll -o ${ll_base}.${OUT_NAME}.ll -S"
-    exec(cmd)
-  }
-
-  def validate(triple_base: String, debug: Boolean) = {
-    val src = triple_base + ".src.bc"
-    val tgt = triple_base + ".tgt.bc"
-    val hint = triple_base + ".hint.json"
-    val cmd = s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
-    exec(cmd)
   }
 
   def classifyGenerateResult(x: (Int, String, String)): GResult = {
@@ -465,7 +460,13 @@ object MainScript {
   //http://stackoverflow.com/questions/9725675/is-there-a-standard-format-for-command-line-shell-help-text
   //http://docopt.org/
   val usage = """
+What It Do:
+    *TODO*
+
 Usage:
+
+-h, --help:
+    Show help text. This.
 
 -s, --simplberry-path <path>:
     Set simplberry directory path.
@@ -507,7 +508,7 @@ Usage:
     Default value is "d".
 
 -g, --generate-strategy:
-    Not yet implemented.
+    *TODO*
     If we are interested in specific pass, running entire O2 with our opt is
     not that meaningfull.
     As it is not stabilized yet, it may cause assertion failure.
@@ -525,12 +526,13 @@ Usage:
   """
   //TODO llvm-dis path?
 
-  def parse_option(args: Array[String]) {
-    type option_map = Map[Symbol, Any]
+  type option_map = Map[Symbol, String]
+
+  def parse_option(args: Array[String]): option_map = {
     def nextOption(map : option_map, list: List[String]) : option_map = {
       list match {
         case Nil => map
-        case "-h" :: _ =>
+        case ("-h" | "--help") :: _ =>
           println(usage)
           System.exit(0)
           ???
@@ -567,14 +569,47 @@ Usage:
 
   def main(args: Array[String]) = {
     val option_map = parse_option(args)
-    println(LLVMBerryLogics.resultDir)
-    exec(s"cp -R ${LLVMBerryLogics.testDir} ${LLVMBerryLogics.resultDir}")
-    val runner = new TestRunner(LLVMBerryLogics.get_ll_bases(LLVMBerryLogics.resultDir), 24)
+    def mkLLVMBerryLogics = (new LLVMBerryLogics(_, _, _, _, _, _)).curried
+    val llvmberry_logics = {
+      val simplberry_path = option_map.get('s)
+      val t0 = mkLLVMBerryLogics(simplberry_path)
+      val t1 =
+        simplberry_path match {
+          case Some(spth) =>
+            val opt_path = spth + "/.build/llvm-obj/bin/opt"
+            val vali_path = spth + "/ocaml_refact/main.native"
+            t0(opt_path)(vali_path)
+          case None =>
+            t0(option_map.get('optpath).get)(
+              option_map.get('valipath).get)
+        }
+      val opt_arg = option_map.get('a).getOrElse("-O2")
+      val t2 = t1(opt_arg)
+      val input_test_dir = option_map.get('i).get
+      val t3 = t2(input_test_dir)
+      val output_result_dir = {
+        val ls = exec("ls")._2.split('\n')
+        val y = input_test_dir.split('/').last
+        def go(i: Int): String = {
+          val x = "test_result#" + y + "#" + i
+          if(ls.contains(x))
+            go(i+1)
+          else x
+        }
+        go(0)
+      }
+      val t4 = t3(output_result_dir)
+      t4
+    }
+
+    println(llvmberry_logics.output_result_dir)
+    exec(s"cp -R ${llvmberry_logics.input_test_dir} ${llvmberry_logics.output_result_dir}")
+    val runner = new TestRunner(LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir), 24)
     println ; println ; printBar()
     println("Start Script")
-    LLVMBerryLogics.compile
+    llvmberry_logics.compile
     println("Compile Done")
-    LLVMBerryLogics.cleanByProducts
+    llvmberry_logics.cleanByProducts
     println("cleanByProducts Done")
     for(i <- 1 to 12) println
     runner.run
