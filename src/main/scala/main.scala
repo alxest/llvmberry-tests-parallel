@@ -36,9 +36,12 @@ object CommonLogics {
 
   object TimeChecker {
       // new scala.collection.immutable.HashMap[String, Map[String, Int]]().
-    var data: scala.collection.mutable.Map[String, Long] =
+    private var data: scala.collection.mutable.Map[String, Long] =
       new scala.collection.mutable.HashMap[String, Long]().withDefaultValue(0)
     val checkTime = true
+    //Percent data is actually not that meaningful,
+    //as it is not called mutually exclusive
+    //Just for convenience
     def getPercentData = {
       val sum = data.values.foldLeft(0: Long)((s, i) => s + i)
       data.map(x => (x._1, "%.1f".format(100 * x._2.toDouble / sum) + "%"))
@@ -73,53 +76,144 @@ class LLVMBerryLogics(
   val main_native_path: String,
   val opt_arg: String,
   val input_test_dir: String,
-  val output_result_dir: String) {
+  val output_result_dir: String,
+  val generate_strategy: String, //not used yet
+  val validate_strategy: String) {
+  import LLVMBerryLogics._
 
   // it seems I cannot put some code here..
   // def this(x: Map[Symbol, String]) = {
   //   this("", "", "", "", "", "") 
   // }
 
+  //get parameter and move to static object?
   def compile = {
-    val generator_compile = exec(s"cd ${simplberry_path}/ && make opt -j24")
-    if(generator_compile._1 != 0) {
-      println("Compile Failed!")
-      println("stdout : " + generator_compile._2)
-      println("stderr : " + generator_compile._3)
-      assert(false)
+    simplberry_path match {
+      case Some(spth) =>
+        val generator_compile = exec(s"cd ${spth}/ && make opt -j24")
+        if(generator_compile._1 != 0) {
+          println("Compile Failed!")
+          println("stdout : " + generator_compile._2)
+          println("stderr : " + generator_compile._3)
+          assert(false)
+        }
+        val validator_compile = exec(s"cd ${spth}/ && make refact -j24")
+        if(validator_compile._1 != 0) {
+          println("Compile Failed!")
+          println("stdout : " + validator_compile._2)
+          println("stderr : " + validator_compile._3)
+          assert(false)
+        }
+      case _ => println("""Should not occur. Trying to compile
+opt and main.native while --simplberry-path is not specified.""")
     }
-    val validator_compile = exec(s"cd ${simplberry_path}/ && make refact -j24")
-    if(validator_compile._1 != 0) {
-      println("Compile Failed!")
-      println("stdout : " + validator_compile._2)
-      println("stderr : " + validator_compile._3)
-      assert(false)
+  }
+
+  def generate(ll_base: String): GResult = {
+    TimeChecker.runWithClock("G") {
+      val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
+      s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
+      val res = exec(cmd)
+      val exitRes = LLVMBerryLogics.classifyGenerateResult(res)
+      if(exitRes != LLVMBerryLogics.GSuccess) {
+        import java.nio.file.{Paths, Files}
+        import java.nio.charset.StandardCharsets
+        val result =
+          "########## CMD\n" + cmd + "\n\n\n" +
+        "########## STDOUT\n" + res._2 + "\n\n\n" +
+        "########## STDERR\n" + res._3
+        TimeChecker.runWithClock("G#write result") {
+          Files.write(Paths.get(ll_base + ".result"),
+            result.getBytes(StandardCharsets.UTF_8))
+        }
+      }
+      exitRes
     }
   }
 
-  def generate(ll_base: String) = {
-    val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
-    s"-o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
-    exec(cmd)
+  def validate(triple_base: String): VResult = {
+    TimeChecker.runWithClock("V") {
+      val src = triple_base + ".src.bc"
+      val tgt = triple_base + ".tgt.bc"
+      val hint = triple_base + ".hint.json"
+
+      def get_cmd(debug: Boolean): String =
+        s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
+
+      lazy val cmd_no_debug = get_cmd(false)
+      lazy val cmd_debug = get_cmd(true)
+
+      def write_result(result_txt: String) =
+        TimeChecker.runWithClock("V#write_result") {
+          Files.write(Paths.get(triple_base + ".result"),
+            result_txt.getBytes(StandardCharsets.UTF_8))
+        }
+
+      def llvm_dis =
+        TimeChecker.runWithClock("V#llvm_dis") {
+          exec(s"llvm-dis ${src}")
+          exec(s"llvm-dis ${tgt}")
+        }
+
+      def remove_triple =
+        TimeChecker.runWithClock("V#remove triple") {
+          Files.delete(Paths.get(src))
+          Files.delete(Paths.get(tgt))
+          Files.delete(Paths.get(hint))
+        }
+
+      val vres = validate_strategy match {
+        case "f" =>
+          val vres = classifyValidateResult(exec(cmd_no_debug))
+          if(vres == LLVMBerryLogics.VSuccess)
+            remove_triple
+          vres
+        case "s" =>
+          val res = exec(cmd_debug)
+          val vres = classifyValidateResult(res)
+          if(vres == LLVMBerryLogics.VSuccess)
+            remove_triple
+          else {
+            llvm_dis
+            write_result(
+              "########## CMD\n" + cmd_debug + "\n\n\n" +
+                "########## STDOUT\n" + res._2 + "\n\n\n" +
+                "########## STDERR\n" + res._3)
+          }
+          vres
+        case "d" =>
+          val vres = classifyValidateResult(exec(cmd_no_debug))
+
+          val res = exec(cmd_debug)
+          write_result(
+            "########## CMD\n" + cmd_debug + "\n\n\n" +
+              "########## STDOUT\n" + res._2 + "\n\n\n" +
+              "########## STDERR\n" + res._3)
+
+          // if(vres == LLVMBerryLogics.VSuccess)
+          //   remove_triple
+          // else {
+          //   val res = exec(cmd_debug)
+          //   write_result(
+          //     "########## CMD\n" + cmd_debug + "\n\n\n" +
+          //       "########## STDOUT\n" + res._2 + "\n\n\n" +
+          //       "########## STDERR\n" + res._3)
+          // }
+          vres
+      }
+      vres
+    }
   }
 
-  def validate(triple_base: String, debug: Boolean) = {
-    val src = triple_base + ".src.bc"
-    val tgt = triple_base + ".tgt.bc"
-    val hint = triple_base + ".hint.json"
-    val cmd = s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
-    exec(cmd)
-  }
-
-  def cleanByProducts = {
-    ??? //this is deprecated, but leave it for now
-    exec(s"""cd ${input_test_dir} && find . -name "*.src.bc" -delete""")
-    exec(s"""cd ${input_test_dir} && find . -name "*.tgt.bc" -delete""")
-    exec(s"""cd ${input_test_dir} && find . -name "*.src.ll" -delete""")
-    exec(s"""cd ${input_test_dir} && find . -name "*.tgt.ll" -delete""")
-    exec(s"""cd ${input_test_dir} && find . -name "*.output.ll" -delete""")
-    exec(s"""cd ${input_test_dir} && find . -name "*.result" -delete""")
-  }
+  //this is deprecated, but leave it for now
+  // def cleanByProducts = {
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.src.bc" -delete""")
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.tgt.bc" -delete""")
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.src.ll" -delete""")
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.tgt.ll" -delete""")
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.output.ll" -delete""")
+  //   exec(s"""cd ${input_test_dir} && find . -name "*.result" -delete""")
+  // }
 }
 
 object LLVMBerryLogics {
@@ -176,10 +270,20 @@ object LLVMBerryLogics {
       VUnknown
   }
 
-  def getOptName(triple_base: String): String = {
+  def get_opt_name(triple_base: String): String = {
+    try {
     val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
     val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
     json.get("opt_name").get.asInstanceOf[String]
+    }
+    catch {
+      case e:Throwable =>
+        println(e)
+        println("opt name does not exit!! --> " + triple_base)
+        for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        //TODO create error logger?
+        "no opt name"
+    }
     //exception handling?
   }
 }
@@ -193,12 +297,15 @@ object LLVMBerryLogics {
 
 
 
-class TestRunner(val ll_bases: List[String], val num_threads: Int) {
+class TestRunner(
+  val llvmberry_logics: LLVMBerryLogics,
+  val process_strategy: String,
+  val num_threads: Int) {
   object Mutex
   sealed abstract class Job
   case class GQJob(val ll_base: String) extends Job
   case class VQJob(val triple_base: String) extends Job
-  case object Nothing extends Job
+  case object NoJob extends Job
   case object Terminate extends Job
 
   sealed abstract class JobResult {
@@ -232,7 +339,7 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
   var VQ_current_total = 0
   def VQ_estimated_total: Double = {
     val num_generated = GQR.foldLeft(0)((s, i) => s + i.generated)
-    num_generated * Math.pow((1.0 * GQ_total / GQR.size), 3.0)
+    num_generated * Math.pow((1.0 * GQ_total / GQR.size), 1.3)
   }
   def GQ_total_time_elapsed =
     GQR.foldLeft(0.0)((s, i) => s + i.time)
@@ -243,101 +350,101 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
   def GQ_estimated_ETA = GQ_estimated_single_time * (GQ_total - GQR.size)
   def VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
 
-  // var count = 0
+  // def fetchNextJob: Job = {
+  //   if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
+  //   else {
+  //     def tryGQ: Job = {
+  //       val bb = Option(GQ.poll)
+  //       if(bb.isDefined) GQJob(bb.get)
+  //       else NoJob
+  //     }
+
+  //     def tryVQ: Job = {
+  //       val bb = Option(VQ.poll)
+  //       if(bb.isDefined) VQJob(bb.get)
+  //       else NoJob
+  //     }
+
+  //     var ret: Job =
+  //       if(GQ_estimated_ETA > VQ_estimated_ETA)
+  //         tryGQ
+  //       else
+  //         tryVQ
+
+  //     if(ret == NoJob) ret = tryGQ
+  //     if(ret == NoJob) ret = tryVQ
+  //     ret
+  //   }
+  // }
 
   def fetchNextJob: Job = {
-    if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
-    else {
-      def tryGQ: Job = {
-        val bb = Option(GQ.poll)
-        if(bb.isDefined) GQJob(bb.get)
-        else Nothing
+    TimeChecker.runWithClock("fetchNextJob") {
+      if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
+      else {
+        def tryGQ: Job = {
+          val bb = Option(GQ.poll)
+          if(bb.isDefined) GQJob(bb.get)
+          else NoJob
+        }
+
+        def tryVQ: Job = {
+          val bb = Option(VQ.poll)
+          if(bb.isDefined) VQJob(bb.get)
+          else NoJob
+        }
+
+        var ret: Job = NoJob
+        process_strategy match {
+          case "g" =>
+            if(ret == NoJob) ret = tryGQ
+            if(ret == NoJob) ret = tryVQ
+          case "v" =>
+            if(ret == NoJob) ret = tryVQ
+            if(ret == NoJob) ret = tryGQ
+          case "d" =>
+            ret = if(GQ_estimated_ETA > VQ_estimated_ETA)
+              tryGQ
+            else
+              tryVQ
+            if(ret == NoJob) ret = tryGQ
+            if(ret == NoJob) ret = tryVQ
+          case _ =>
+            assert(false)
+            ???
+        }
+        ret
       }
-
-      def tryVQ: Job = {
-        val bb = Option(VQ.poll)
-        if(bb.isDefined) VQJob(bb.get)
-        else Nothing
-      }
-
-      var ret: Job =
-        if(GQ_estimated_ETA > VQ_estimated_ETA)
-          tryGQ
-        else
-          tryVQ
-
-      if(ret == Nothing) ret = tryGQ
-      if(ret == Nothing) ret = tryVQ
-      ret
     }
   }
 
   def processGQ(ll_base: String): GQJobResult = {
-    TimeChecker.runWithClock("GQ") {
+    TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val res = TimeChecker.runWithClock("GQ#generate") {
-        LLVMBerryLogics.generate(ll_base)
-      }
+      val gres = llvmberry_logics.generate(ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
-      val exitRes = LLVMBerryLogics.classifyGenerateResult(res)
-      if(exitRes != LLVMBerryLogics.GSuccess) {
-        import java.nio.file.{Paths, Files}
-        import java.nio.charset.StandardCharsets
-        val result = "########## STDOUT\n" + res._2 +
-        "\n\n\n ########## STDERR\n" + res._3
-        TimeChecker.runWithClock("GQ#write result") {
-          Files.write(Paths.get(ll_base + ".result"),
-            result.getBytes(StandardCharsets.UTF_8))
-        }
-      }
-      new GQJobResult(fileSize, (t1 - t0)/1000.0, tri_bases.size, exitRes)
+      new GQJobResult(fileSize, (t1 - t0)/1000.0, tri_bases.size, gres)
     }
   }
 
   def processVQ(triple_base: String): VQJobResult = {
-    TimeChecker.runWithClock("VQ") {
+    TimeChecker.runWithClock("processVQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(triple_base + ".ll")).length
-      var res = TimeChecker.runWithClock("VQ#validate") {
-        LLVMBerryLogics.validate(triple_base, false)
-      }
-      val optName = LLVMBerryLogics.getOptName(triple_base)
+      val optName = LLVMBerryLogics.get_opt_name(triple_base)
+      val vres = llvmberry_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
-      val exitRes = LLVMBerryLogics.classifyValidateResult(res)
-      if(exitRes != LLVMBerryLogics.VSuccess) {
-        TimeChecker.runWithClock("VQ#validate with debug") {
-          res = LLVMBerryLogics.validate(triple_base, true)
-        }
-        val result = "########## STDOUT\n" + res._2 +
-        "\n\n\n ########## STDERR\n" + res._3
-        TimeChecker.runWithClock("VQ#write result") {
-          Files.write(Paths.get(triple_base + ".result"),
-            result.getBytes(StandardCharsets.UTF_8))
-        }
-        TimeChecker.runWithClock("VQ#llvm-dis") {
-          exec(s"llvm-dis ${triple_base}.src.bc")
-          exec(s"llvm-dis ${triple_base}.tgt.bc")
-        }
-      }
-      else {
-        TimeChecker.runWithClock("VQ#remove triple") {
-          Files.delete(Paths.get(triple_base + ".src.bc"))
-          Files.delete(Paths.get(triple_base + ".tgt.bc"))
-          Files.delete(Paths.get(triple_base + ".hint.json"))
-        }
-      }
-      new VQJobResult(fileSize, (t1 - t0)/1000.0, optName, exitRes)
+      new VQJobResult(fileSize, (t1 - t0)/1000.0, optName, vres)
     }
   }
 
   class MyThread extends Thread {
     override def run {
       def runner(): Unit = {
-        printBrief
+        printProgress
         fetchNextJob match {
           case GQJob(ll_base) =>
             val res = processGQ(ll_base)
@@ -347,7 +454,7 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
             val res = processVQ(triple_base)
             Mutex.synchronized { VQR += res }
             runner
-          case Nothing => Thread.sleep(2000) ; runner
+          case NoJob => Thread.sleep(2000) ; runner
           case Terminate => ()
         }
       }
@@ -357,8 +464,8 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
 
   var last_printed: Long = 0
 
-  def printBrief = Mutex.synchronized {
-    TimeChecker.runWithClock("printBrief") {
+  def printProgress = Mutex.synchronized {
+    TimeChecker.runWithClock("printProgress") {
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
@@ -440,6 +547,8 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
   }
 
   def run = {
+    val ll_bases =
+      LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir)
     ll_bases.foreach(GQ.offer(_))
     GQ_total = GQ.size
     val threads: IndexedSeq[Thread] =
@@ -453,6 +562,15 @@ class TestRunner(val ll_bases: List[String], val num_threads: Int) {
     assert(VQ.size == 0 && VQR.size == VQ_current_total)
   }
 }
+
+
+
+
+
+
+
+
+
 
 //http://stackoverflow.com/questions/2315912/scala-best-way-to-parse-command-line-parameters-cli
 object MainScript {
@@ -520,9 +638,13 @@ Usage:
     Set validating strategy.
     "f": Fast. Always run without "-d" option.
     "s": Slow. Always run with "-d" option, and llvm-dis to src/tgt.
-    "d": First try with "f" strategy, and then if validation has not succeeded,
-         re-run with "s" strategy.
-    Default value is "d"
+    "d": Try with without "-d" option, and then if validation has not succeeded,
+         re-run with "-d" option. It does not run llvm-dis.
+    Default value is "d".
+
+-j, --jobs <int>:
+    Set number of threads.
+    Default value is 24.
   """
   //TODO llvm-dis path?
 
@@ -556,6 +678,8 @@ Usage:
           ???
         case ("-v" | "--validate-strategy") :: value :: tail =>
           nextOption(map ++ Map('v -> value), tail)
+        case ("-j" | "--jobs") :: value :: tail =>
+          nextOption(map ++ Map('v -> value), tail)
         case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
@@ -569,20 +693,32 @@ Usage:
 
   def main(args: Array[String]) = {
     val option_map = parse_option(args)
-    def mkLLVMBerryLogics = (new LLVMBerryLogics(_, _, _, _, _, _)).curried
+    def mkLLVMBerryLogics = (new LLVMBerryLogics(_, _, _, _, _, _, _, _)).curried
     val llvmberry_logics = {
       val simplberry_path = option_map.get('s)
+      val opt_path = option_map.get('optpath)
+      val vali_path = option_map.get('valipath)
       val t0 = mkLLVMBerryLogics(simplberry_path)
       val t1 =
-        simplberry_path match {
-          case Some(spth) =>
+        (simplberry_path, opt_path, vali_path) match {
+          case (Some(spth), None, None) =>
             val opt_path = spth + "/.build/llvm-obj/bin/opt"
             val vali_path = spth + "/ocaml_refact/main.native"
             t0(opt_path)(vali_path)
-          case None =>
-            t0(option_map.get('optpath).get)(
-              option_map.get('valipath).get)
-        }
+          case (None, Some(opth), Some(vpth)) =>
+            t0(opth)(vpth)
+          case (None, None, None) =>
+            val spth = exec("cd .. && pwd")._2
+            val opt_path = spth + "/.build/llvm-obj/bin/opt"
+            val vali_path = spth + "/ocaml_refact/main.native"
+            t0(opt_path)(vali_path)
+          case _ => println("""Only three cases are possible.
+1. Only specify simplberry path
+2. Only specify opt_path and vali_path
+3. Do not speecify at all.
+""")
+            ???
+       }
       val opt_arg = option_map.get('a).getOrElse("-O2")
       val t2 = t1(opt_arg)
       val input_test_dir = option_map.get('i).get
@@ -599,18 +735,25 @@ Usage:
         go(0)
       }
       val t4 = t3(output_result_dir)
-      t4
+      val t5 = t4(option_map.get('g).getOrElse("d"))
+      val t6 = t5(option_map.get('v).getOrElse("d"))
+      t6
     }
 
-    println(llvmberry_logics.output_result_dir)
     exec(s"cp -R ${llvmberry_logics.input_test_dir} ${llvmberry_logics.output_result_dir}")
-    val runner = new TestRunner(LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir), 24)
+    val process_strategy = option_map.get('p).getOrElse("d")
+    val jobs = option_map.get('j).getOrElse("24").toInt
+    val runner = new TestRunner(llvmberry_logics, process_strategy, jobs)
+
+
+    println(llvmberry_logics.simplberry_path)
+    println(llvmberry_logics.output_result_dir)
     println ; println ; printBar()
     println("Start Script")
     llvmberry_logics.compile
     println("Compile Done")
-    llvmberry_logics.cleanByProducts
-    println("cleanByProducts Done")
+    // llvmberry_logics.cleanByProducts
+    // println("cleanByProducts Done")
     for(i <- 1 to 12) println
     runner.run
     for(i <- 1 to 8) println
@@ -625,5 +768,14 @@ Usage:
     println ; println ; printBar()
   }
 }
+
+
+
+
+
+
+
+
+
 
 MainScript.main(args)
