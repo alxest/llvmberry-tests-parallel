@@ -55,9 +55,10 @@ object CommonLogics {
 
   def string_with_bar(x: String = ""): String = {
     val width = 190
+    val pad = width - x.length
       // exec("tput cols")._2.trim.toInt - x.size
-    val half_width = width/2
-    "-" * half_width + x + "-" * (width - half_width)
+    val half_pad = pad/2
+    "-" * half_pad + x + "-" * (pad - half_pad)
   }
 
   object TimeChecker {
@@ -346,44 +347,47 @@ class TestRunner(
   case object Terminate extends Job
 
   sealed abstract class JobResult {
+    val base_name: String
     val fileSize: Long
     val time: Double
     // val classifiedResult: String
 
     // f"size: ${fileSize}%20s" +
     //padTo(' ', 20) PASSES type checking!!!!!
-    def p(x: String): String = x.padTo(40, ' ')
+    def p(x: String): String = x.padTo(25, ' ')
+    override def toString =
+      s"${base_name}".padTo(115, ' ') +
+    p(s"   size: ${fileSize}") +
+    p(s"   time: ${format_double(time)}")
+    //sometimes base_name is too long and padding cannot care it.
+    //there should be spaces between them
   } //without val, it is private
 
   class GQJobResult(
+    val base_name: String,
     val fileSize: Long,
     val time: Double,
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
-      p(s"size: ${fileSize}") +
-      p(s"time: ${format_double(time)}") +
-      p(s"generated: ${generated}") +
-      p(s"result: ${classifiedResult}")
+      super.toString +
+      p(s"generated: ${generated}")
     }
   }
 
   class VQJobResult(
+    val base_name: String,
     val fileSize: Long,
     val time: Double,
     val optName: String,
     val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult {
     override def toString: String = {
-      p(s"size: ${fileSize}") +
-      p(s"time: ${format_double(time)}") +
-      p(s"optName: ${optName}") +
-      p(s"result: ${classifiedResult}")
+      super.toString +
+      p(s"optName: ${optName}")
     }
   }
-
-
   val GQ = new ConcurrentLinkedQueue[String]
   val VQ = new ConcurrentLinkedQueue[String]
 
@@ -454,7 +458,7 @@ class TestRunner(
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
-      new GQJobResult(fileSize, (t1 - t0)/1000.0, tri_bases.size, gres)
+      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, tri_bases.size, gres)
     }
   }
 
@@ -465,7 +469,7 @@ class TestRunner(
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
       val vres = llvmberry_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
-      new VQJobResult(fileSize, (t1 - t0)/1000.0, optName, vres)
+      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres)
     }
   }
 
@@ -589,11 +593,37 @@ class TestRunner(
     row_to_string("All Validation")(table_filled)
   }
 
-  def GQR_to_list: String = GQR.sortBy(_.classifiedResult.toString).
-    foldRight("")((i, s) => s + i.toString + "\n")
 
-  def VQR_to_list: String = VQR.sortBy(x => (x.optName, x.classifiedResult.toString)).
-    foldRight("")((i, s) => s + i.toString + "\n")
+  //TODO get absolute path
+  //TODO check time consumption
+  //TODO check tolerance on big size
+  //TODO print once more with optName as first index?
+  def GQR_to_list: String =
+    GQR.groupBy(_.classifiedResult).
+      foldRight("")((i, s) =>
+        s + string_with_bar(i._1.toString) + "\n\n" +
+          i._2.foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
+      )
+  // GQR.sortBy(_.classifiedResult.toString).toList.
+  // foldRight("")((i, s) => s + i.toString + "\n")
+  //without toList, it causes stack overflow
+  //same foldRight name but implementation changes
+
+  def VQR_to_list: String = {
+    def idx1(x: VQJobResult) = x.classifiedResult
+    def idx2(x: VQJobResult) = x.optName
+    VQR.groupBy(idx1).
+      foldRight("")((i, s) =>
+        s + string_with_bar(i._1.toString) + "\n\n" +
+          i._2.sortBy(idx2).foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
+      )
+  }
+      // (x => (x._1, x._2.groupBy(_.classifiedResult))).
+      // foldRight("")((i, s) => s + i.toString + "\n")
+  // VQR.groupBy(_.optName).map(x => (x._1, x._2.groupBy(_.classifiedResult))).
+  //   foldRight("")((i, s) => s + i.toString + "\n")
+  // VQR.sortBy(x => (x.optName, x.classifiedResult.toString)).toList.
+  // foldRight("")((i, s) => s + i.toString + "\n")
 }
 
 
@@ -797,11 +827,14 @@ Usage:
     runner.VQR_to_matrix + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_row
     val detail_txt =
-      string_with_bar("GQR result") + "\n\n" + runner.GQR_to_list + "\n\n" +
-    string_with_bar("VQR result") + "\n\n" + runner.VQR_to_list + "\n\n"
+      string_with_bar() + "\n" + string_with_bar("Generate Result") + "\n" + string_with_bar() + "\n\n" +
+    runner.GQR_to_list + "\n\n" +
+    string_with_bar() + "\n" + string_with_bar("Validate Result") + "\n" + string_with_bar() + "\n\n" +
+    runner.VQR_to_list + "\n\n"
+
     write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
     write_to_file(detail_txt, new File(llvmberry_logics.output_result_dir + "/report.detail"))
-    //TODO print actual list
+    println("End Script")
   }
 }
 
