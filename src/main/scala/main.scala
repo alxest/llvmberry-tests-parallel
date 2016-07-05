@@ -89,6 +89,8 @@ class LLVMBerryLogics(
   //get parameter and move to static object?
   def compile = {
     simplberry_path match {
+      case None => println("""Should not occur. Trying to compile
+opt and main.native while --simplberry-path is not specified.""")
       case Some(spth) =>
         val generator_compile = exec(s"cd ${spth}/ && make opt -j24")
         if(generator_compile._1 != 0) {
@@ -104,8 +106,25 @@ class LLVMBerryLogics(
           println("stderr : " + validator_compile._3)
           assert(false)
         }
-      case _ => println("""Should not occur. Trying to compile
-opt and main.native while --simplberry-path is not specified.""")
+
+        def write_status(git_path: String, write_path: String) = {
+          val commit = exec(s"cd ${git_path} && git show HEAD")._2
+          val diff = exec(s"cd ${git_path} && git diff HEAD")._2
+          val txt =
+            "########## COMMIT\n" + commit + "\n\n\n" +
+          "########## DIFF\n" + diff
+          import java.nio.file.{Paths, Files}
+          import java.nio.charset.StandardCharsets
+          Files.write(Paths.get(write_path),
+            txt.getBytes(StandardCharsets.UTF_8))
+        }
+
+        write_status(s"${spth}/lib/llvm",
+          output_result_dir + "/llvm.status")
+        write_status(s"${spth}/",
+          output_result_dir + "/simplberry.status")
+        write_status(s"${spth}/lib/vellvm",
+          output_result_dir + "/vellvm.status")
     }
   }
 
@@ -114,8 +133,8 @@ opt and main.native while --simplberry-path is not specified.""")
       val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
-      val exitRes = LLVMBerryLogics.classifyGenerateResult(res)
-      if(exitRes != LLVMBerryLogics.GSuccess) {
+      val gres = LLVMBerryLogics.classifyGenerateResult(res)
+      if(gres != LLVMBerryLogics.GSuccess) {
         import java.nio.file.{Paths, Files}
         import java.nio.charset.StandardCharsets
         val result =
@@ -127,7 +146,7 @@ opt and main.native while --simplberry-path is not specified.""")
             result.getBytes(StandardCharsets.UTF_8))
         }
       }
-      exitRes
+      gres
     }
   }
 
