@@ -27,11 +27,11 @@ object CommonLogics {
     System.out.print("\u001b[1A\u001b[2K");
     // System.out.print("\33[1A\33[2K");
 
-  def printBar(x: String = "") = {
+  def string_with_bar(x: String = ""): String = {
     val width = 200
       // exec("tput cols")._2.trim.toInt - x.size
     val half_width = width/2
-    println("-" * half_width + x + "-" * (width - half_width))
+    "-" * half_width + x + "-" * (width - half_width)
   }
 
   object TimeChecker {
@@ -203,21 +203,15 @@ opt and main.native while --simplberry-path is not specified.""")
         case "d" =>
           val vres = classifyValidateResult(exec(cmd_no_debug))
 
-          val res = exec(cmd_debug)
-          write_result(
-            "########## CMD\n" + cmd_debug + "\n\n\n" +
-              "########## STDOUT\n" + res._2 + "\n\n\n" +
-              "########## STDERR\n" + res._3)
-
-          // if(vres == LLVMBerryLogics.VSuccess)
-          //   remove_triple
-          // else {
-          //   val res = exec(cmd_debug)
-          //   write_result(
-          //     "########## CMD\n" + cmd_debug + "\n\n\n" +
-          //       "########## STDOUT\n" + res._2 + "\n\n\n" +
-          //       "########## STDERR\n" + res._3)
-          // }
+          if(vres == LLVMBerryLogics.VSuccess)
+            remove_triple
+          else {
+            val res = exec(cmd_debug)
+            write_result(
+              "########## CMD\n" + cmd_debug + "\n\n\n" +
+                "########## STDOUT\n" + res._2 + "\n\n\n" +
+                "########## STDERR\n" + res._3)
+          }
           vres
       }
       vres
@@ -298,8 +292,10 @@ object LLVMBerryLogics {
     catch {
       case e:Throwable =>
         println(e)
+        println("Should Not Occur!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         println("opt name does not exit!! --> " + triple_base)
         for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        //just terminating here will only terminate one thread.
         //TODO create error logger?
         "no opt name"
     }
@@ -368,33 +364,6 @@ class TestRunner(
   def VQ_estimated_single_time = VQ_total_time_elapsed / VQR.size
   def GQ_estimated_ETA = GQ_estimated_single_time * (GQ_total - GQR.size)
   def VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
-
-  // def fetchNextJob: Job = {
-  //   if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
-  //   else {
-  //     def tryGQ: Job = {
-  //       val bb = Option(GQ.poll)
-  //       if(bb.isDefined) GQJob(bb.get)
-  //       else NoJob
-  //     }
-
-  //     def tryVQ: Job = {
-  //       val bb = Option(VQ.poll)
-  //       if(bb.isDefined) VQJob(bb.get)
-  //       else NoJob
-  //     }
-
-  //     var ret: Job =
-  //       if(GQ_estimated_ETA > VQ_estimated_ETA)
-  //         tryGQ
-  //       else
-  //         tryVQ
-
-  //     if(ret == NoJob) ret = tryGQ
-  //     if(ret == NoJob) ret = tryVQ
-  //     ret
-  //   }
-  // }
 
   def fetchNextJob: Job = {
     TimeChecker.runWithClock("fetchNextJob") {
@@ -473,7 +442,8 @@ class TestRunner(
             val res = processVQ(triple_base)
             Mutex.synchronized { VQR += res }
             runner
-          case NoJob => Thread.sleep(2000) ; runner
+          case NoJob => Thread.sleep(1000) ; runner
+            //NoJob Logger?
           case Terminate => ()
         }
       }
@@ -494,31 +464,32 @@ class TestRunner(
         println((VQR.size + "/" + VQ_estimated_total).padTo(30, ' ') +
           "%.1f".format(VQ_estimated_ETA))
         println("####" + VQ_current_total + " " + VQ_estimated_total)
-        printGQR
-        printVQRSimple
+        println(GQR_to_string)
+        println(VQR_to_string_short)
         // println(TimeChecker.data)
         println(TimeChecker.getPercentData)
       }
     }
   }
 
-  def printRow[A](row_name: String)(table: Map[A, Int]) = {
-    print(row_name.padTo(20, ' ') + " ---->   ")
-    table.foreach(y => print((if(y._2 != 0) y.toString else "").padTo(20, ' ') + " "))
-    println
+  def row_to_string[A](row_name: String)(table: Map[A, Int]): String = {
+    val t0 = row_name.padTo(20, ' ') + " ---->   "
+    val t1 = table.foldRight(t0)((i, s) =>
+      s + (if(i._2 != 0) i.toString else "").padTo(20, ' ') + " ")
+    t1
   }
 
-  def printGQR = {
+  def GQR_to_string: String = {
     val table: Map[LLVMBerryLogics.GResult, Int] =
       new scala.collection.immutable.HashMap[LLVMBerryLogics.GResult, Int]().
         withDefaultValue(0)
     val table_filled = GQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
     }
-    printRow("All Generation")(table_filled)
+    row_to_string("All Generation")(table_filled)
   }
 
-  def printVQR = {
+  def VQR_to_string = {
     val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
     ((LLVMBerryLogics.VSuccess, 0)) +
     ((LLVMBerryLogics.VFail, 0)) +
@@ -543,10 +514,10 @@ class TestRunner(
       s.updated(i.optName, trans)
     }
 
-    table_filled.foreach{x => printRow(x._1)(x._2)}
+    table_filled.foldRight("")((x, s) => s + row_to_string(x._1)(x._2) + "\n")
   }
 
-  def printVQRSimple = {
+  def VQR_to_string_short: String = {
     val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
     ((LLVMBerryLogics.VSuccess, 0)) +
     ((LLVMBerryLogics.VFail, 0)) +
@@ -562,7 +533,7 @@ class TestRunner(
     val table_filled = VQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
     }
-    printRow("All Validation")(table_filled)
+    row_to_string("All Validation")(table_filled)
   }
 
   def run = {
@@ -710,7 +681,7 @@ Usage:
     nextOption(Map(), args.toList)
   }
 
-  def main(args: Array[String]) = {
+  def main(args: Array[String]): Unit = {
     val option_map = parse_option(args)
     def mkLLVMBerryLogics = (new LLVMBerryLogics(_, _, _, _, _, _, _, _)).curried
     val llvmberry_logics = {
@@ -767,7 +738,7 @@ Usage:
 
     println(llvmberry_logics.simplberry_path)
     println(llvmberry_logics.output_result_dir)
-    println ; println ; printBar()
+    println ; println ; println(string_with_bar())
     println("Start Script")
     llvmberry_logics.compile
     println("Compile Done")
@@ -778,13 +749,15 @@ Usage:
     for(i <- 1 to 8) println
     println("Test Done")
     println(runner.GQ_total + " " + runner.VQ_current_total)
-    println ; println ; printBar()
-    runner.printGQR
-    println ; println ; printBar()
-    runner.printVQR
-    println ; println ; printBar()
-    runner.printVQRSimple
-    println ; println ; printBar()
+    val txt = "\n\n" + string_with_bar() + "\n" + runner.GQR_to_string +
+    "\n\n" + string_with_bar() + "\n" + runner.VQR_to_string +
+    "\n\n" + string_with_bar() + "\n" + runner.VQR_to_string_short
+    import java.nio.file.{Paths, Files}
+    import java.nio.charset.StandardCharsets
+    Files.write(Paths.get(llvmberry_logics.output_result_dir + "/test.report"),
+      txt.getBytes(StandardCharsets.UTF_8))
+
+    //TODO print actual list
   }
 }
 
@@ -798,3 +771,4 @@ Usage:
 
 
 MainScript.main(args)
+
