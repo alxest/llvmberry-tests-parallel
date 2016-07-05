@@ -1,15 +1,41 @@
 import sys.process._
-import java.util.concurrent.atomic._
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent._
-import scala.util.Random
 import java.io.File
-import java.nio.file.{Paths, Files}
-import java.nio.charset.StandardCharsets
-import scala.util.parsing.json._
 
 object CommonLogics {
+
+  def format_double(x: Double): String =
+    "%.1f".format(x)
+
+  def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) {
+    val p = new java.io.PrintWriter(f)
+    try { op(p) } finally { p.close() }
+  }
+
+  //It does not have to be file, rather it can be String
+  //but differentiating type can far prevent error... really.
+  //also we can always wrap to path object if it is really a path.
+  //originally used nio, but changed to this
+  def write_to_file(contents: String, file: File): Unit = {
+    TimeChecker.runWithClock("write_to_file") {
+      import java.io.PrintWriter
+      val p = new PrintWriter(file)
+      try {
+        p.write(contents)
+      }
+      catch {
+        case e: Throwable =>
+          println(e)
+          println("File Write Failed!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+          for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+          //just terminating here will only terminate one thread.
+          //TODO create error logger?
+      }
+      finally {
+        p.close
+      }
+    }
+  }
+
   def exec(cmd: String): (Int, String, String) = {
     val o = new StringBuilder
     val e = new StringBuilder
@@ -28,7 +54,7 @@ object CommonLogics {
     // System.out.print("\33[1A\33[2K");
 
   def string_with_bar(x: String = ""): String = {
-    val width = 200
+    val width = 190
       // exec("tput cols")._2.trim.toInt - x.size
     val half_width = width/2
     "-" * half_width + x + "-" * (width - half_width)
@@ -44,7 +70,7 @@ object CommonLogics {
     //Just for convenience
     def getPercentData = {
       val sum = data.values.foldLeft(0: Long)((s, i) => s + i)
-      data.map(x => (x._1, "%.1f".format(100 * x._2.toDouble / sum) + "%"))
+      data.map(x => (x._1, format_double(100 * x._2.toDouble / sum) + "%"))
     }
     def runWithClock[A](name: String)(block: => A): A = {
       if(checkTime) {
@@ -111,12 +137,9 @@ opt and main.native while --simplberry-path is not specified.""")
           val commit = exec(s"cd ${git_path} && git show HEAD")._2
           val diff = exec(s"cd ${git_path} && git diff HEAD")._2
           val txt =
-            "########## COMMIT\n" + commit + "\n\n\n" +
-          "########## DIFF\n" + diff
-          import java.nio.file.{Paths, Files}
-          import java.nio.charset.StandardCharsets
-          Files.write(Paths.get(write_path),
-            txt.getBytes(StandardCharsets.UTF_8))
+            string_with_bar("COMMIT") + "\n" + commit + "\n\n" +
+          string_with_bar("DIFF") + "\n" + diff + "\n\n"
+          write_to_file(txt, new File(write_path))
         }
 
         write_status(s"${spth}/lib/llvm",
@@ -135,16 +158,11 @@ opt and main.native while --simplberry-path is not specified.""")
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
       if(gres != LLVMBerryLogics.GSuccess) {
-        import java.nio.file.{Paths, Files}
-        import java.nio.charset.StandardCharsets
-        val result =
-          "########## CMD\n" + cmd + "\n\n\n" +
-        "########## STDOUT\n" + res._2 + "\n\n\n" +
-        "########## STDERR\n" + res._3
-        TimeChecker.runWithClock("G#write result") {
-          Files.write(Paths.get(ll_base + ".result"),
-            result.getBytes(StandardCharsets.UTF_8))
-        }
+        val txt =
+          string_with_bar("CMD") + "\n" + cmd + "\n\n" +
+        string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+        string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+        write_to_file(txt, new File(ll_base + ".result"))
       }
       gres
     }
@@ -162,12 +180,6 @@ opt and main.native while --simplberry-path is not specified.""")
       lazy val cmd_no_debug = get_cmd(false)
       lazy val cmd_debug = get_cmd(true)
 
-      def write_result(result_txt: String) =
-        TimeChecker.runWithClock("V#write_result") {
-          Files.write(Paths.get(triple_base + ".result"),
-            result_txt.getBytes(StandardCharsets.UTF_8))
-        }
-
       def llvm_dis =
         TimeChecker.runWithClock("V#llvm_dis") {
           exec(s"llvm-dis ${src}")
@@ -176,9 +188,9 @@ opt and main.native while --simplberry-path is not specified.""")
 
       def remove_triple =
         TimeChecker.runWithClock("V#remove triple") {
-          Files.delete(Paths.get(src))
-          Files.delete(Paths.get(tgt))
-          Files.delete(Paths.get(hint))
+          (new File(src)).delete
+          (new File(tgt)).delete
+          (new File(hint)).delete
         }
 
       val vres = validate_strategy match {
@@ -194,10 +206,11 @@ opt and main.native while --simplberry-path is not specified.""")
             remove_triple
           else {
             llvm_dis
-            write_result(
-              "########## CMD\n" + cmd_debug + "\n\n\n" +
-                "########## STDOUT\n" + res._2 + "\n\n\n" +
-                "########## STDERR\n" + res._3)
+            val txt =
+              string_with_bar("CMD") + "\n" + cmd_debug + "\n\n" +
+            string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+            string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+            write_to_file(txt, new File(triple_base + ".result"))
           }
           vres
         case "d" =>
@@ -207,10 +220,11 @@ opt and main.native while --simplberry-path is not specified.""")
             remove_triple
           else {
             val res = exec(cmd_debug)
-            write_result(
-              "########## CMD\n" + cmd_debug + "\n\n\n" +
-                "########## STDOUT\n" + res._2 + "\n\n\n" +
-                "########## STDERR\n" + res._3)
+            val txt =
+              string_with_bar("CMD") + "\n" + cmd_debug + "\n\n" +
+            string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+            string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+            write_to_file(txt, new File(triple_base + ".result"))
           }
           vres
       }
@@ -251,7 +265,8 @@ object LLVMBerryLogics {
       val y = x.split('.')
       y.size >= 2 && NOT_PLAINS.contains(y.takeRight(2).mkString("."))
     }.map(remove_extensions(1))
-    Random.shuffle(ret.toList)
+    ret.toList
+    // scala.util.Random.shuffle(ret.toList)
   }
 
   def remove_extensions(n: Int)(x: String): String =
@@ -284,6 +299,7 @@ object LLVMBerryLogics {
   }
 
   def get_opt_name(triple_base: String): String = {
+    import scala.util.parsing.json._
     try {
     val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
     val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
@@ -316,6 +332,12 @@ class TestRunner(
   val llvmberry_logics: LLVMBerryLogics,
   val process_strategy: String,
   val num_threads: Int) {
+
+  import java.util.concurrent.atomic._
+  import java.util.concurrent.atomic.AtomicLong
+  import java.util.concurrent.atomic.AtomicReference
+  import java.util.concurrent._
+
   object Mutex
   sealed abstract class Job
   case class GQJob(val ll_base: String) extends Job
@@ -327,6 +349,10 @@ class TestRunner(
     val fileSize: Long
     val time: Double
     // val classifiedResult: String
+
+    // f"size: ${fileSize}%20s" +
+    //padTo(' ', 20) PASSES type checking!!!!!
+    def p(x: String): String = x.padTo(40, ' ')
   } //without val, it is private
 
   class GQJobResult(
@@ -334,14 +360,28 @@ class TestRunner(
     val time: Double,
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
-  ) extends JobResult
+  ) extends JobResult {
+    override def toString: String = {
+      p(s"size: ${fileSize}") +
+      p(s"time: ${format_double(time)}") +
+      p(s"generated: ${generated}") +
+      p(s"result: ${classifiedResult}")
+    }
+  }
 
   class VQJobResult(
     val fileSize: Long,
     val time: Double,
     val optName: String,
     val classifiedResult: LLVMBerryLogics.VResult
-  ) extends JobResult
+  ) extends JobResult {
+    override def toString: String = {
+      p(s"size: ${fileSize}") +
+      p(s"time: ${format_double(time)}") +
+      p(s"optName: ${optName}") +
+      p(s"result: ${classifiedResult}")
+    }
+  }
 
 
   val GQ = new ConcurrentLinkedQueue[String]
@@ -350,7 +390,7 @@ class TestRunner(
   var GQR = scala.collection.mutable.Queue[GQJobResult]()
   var VQR = scala.collection.mutable.Queue[VQJobResult]()
 
-  var GQ_total = 0
+  var GQ_total = 0 //TODO change it to val
   var VQ_current_total = 0
   def VQ_estimated_total: Double = {
     val num_generated = GQR.foldLeft(0)((s, i) => s + i.generated)
@@ -365,8 +405,8 @@ class TestRunner(
   def GQ_estimated_ETA = GQ_estimated_single_time * (GQ_total - GQR.size)
   def VQ_estimated_ETA = VQ_estimated_single_time * (VQ_estimated_total - VQR.size)
 
-  def fetchNextJob: Job = {
-    TimeChecker.runWithClock("fetchNextJob") {
+  def fetch_next_job: Job = {
+    TimeChecker.runWithClock("fetch_next_job") {
       if(GQR.size == GQ_total && VQR.size == VQ_current_total) Terminate
       else {
         def tryGQ: Job = {
@@ -432,8 +472,8 @@ class TestRunner(
   class MyThread extends Thread {
     override def run {
       def runner(): Unit = {
-        printProgress
-        fetchNextJob match {
+        print_progress
+        fetch_next_job match {
           case GQJob(ll_base) =>
             val res = processGQ(ll_base)
             Mutex.synchronized { GQR += res }
@@ -451,21 +491,38 @@ class TestRunner(
     }
   }
 
+  def run = {
+    val ll_bases =
+      LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir)
+    ll_bases.foreach(GQ.offer(_))
+    GQ_total = GQ.size
+    val threads: IndexedSeq[Thread] =
+      (for (i <- 1 to num_threads) yield {
+        val thread = new MyThread
+        thread.start
+        thread
+      })
+    threads.foreach(_.join)
+    assert(GQ.size == 0 && GQR.size == GQ_total)
+    assert(VQ.size == 0 && VQR.size == VQ_current_total)
+  }
+
+  //TODO separate object
   var last_printed: Long = 0
 
-  def printProgress = Mutex.synchronized {
-    TimeChecker.runWithClock("printProgress") {
+  def print_progress = Mutex.synchronized {
+    TimeChecker.runWithClock("print_progress") {
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
         (1 to 6) foreach { _ => goPreviousLine }
         println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
-          "%.1f".format(GQ_estimated_ETA))
-        println((VQR.size + "/" + VQ_estimated_total).padTo(30, ' ') +
-          "%.1f".format(VQ_estimated_ETA))
-        println("####" + VQ_current_total + " " + VQ_estimated_total)
-        println(GQR_to_string)
-        println(VQR_to_string_short)
+          format_double(GQ_estimated_ETA))
+        println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
+          format_double(VQ_estimated_ETA))
+        println("####" + VQ_current_total + " " + format_double(VQ_estimated_total))
+        println(GQR_to_row)
+        println(VQR_to_row)
         // println(TimeChecker.data)
         println(TimeChecker.getPercentData)
       }
@@ -479,7 +536,7 @@ class TestRunner(
     t1
   }
 
-  def GQR_to_string: String = {
+  def GQR_to_row: String = {
     val table: Map[LLVMBerryLogics.GResult, Int] =
       new scala.collection.immutable.HashMap[LLVMBerryLogics.GResult, Int]().
         withDefaultValue(0)
@@ -489,7 +546,7 @@ class TestRunner(
     row_to_string("All Generation")(table_filled)
   }
 
-  def VQR_to_string = {
+  def VQR_to_matrix = {
     val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
     ((LLVMBerryLogics.VSuccess, 0)) +
     ((LLVMBerryLogics.VFail, 0)) +
@@ -500,11 +557,7 @@ class TestRunner(
 
     val table: Map[String, Map[LLVMBerryLogics.VResult, Int]] =
       new scala.collection.immutable.HashMap[String, Map[LLVMBerryLogics.VResult, Int]]().
-        withDefaultValue(
-          // new scala.collection.immutable.HashMap[String, Int]().
-          //   withDefaultValue(0)
-          VblankRow
-        )
+        withDefaultValue(VblankRow)
 
 
     val table_filled = VQR.foldLeft(table){(s, i) =>
@@ -517,7 +570,7 @@ class TestRunner(
     table_filled.foldRight("")((x, s) => s + row_to_string(x._1)(x._2) + "\n")
   }
 
-  def VQR_to_string_short: String = {
+  def VQR_to_row: String = {
     val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
     ((LLVMBerryLogics.VSuccess, 0)) +
     ((LLVMBerryLogics.VFail, 0)) +
@@ -536,21 +589,11 @@ class TestRunner(
     row_to_string("All Validation")(table_filled)
   }
 
-  def run = {
-    val ll_bases =
-      LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir)
-    ll_bases.foreach(GQ.offer(_))
-    GQ_total = GQ.size
-    val threads: IndexedSeq[Thread] =
-      (for (i <- 1 to num_threads) yield {
-        val thread = new MyThread
-        thread.start
-        thread
-      })
-    threads.foreach(_.join)
-    assert(GQ.size == 0 && GQR.size == GQ_total)
-    assert(VQ.size == 0 && VQR.size == VQ_current_total)
-  }
+  def GQR_to_list: String = GQR.sortBy(_.classifiedResult.toString).
+    foldRight("")((i, s) => s + i.toString + "\n")
+
+  def VQR_to_list: String = VQR.sortBy(x => (x.optName, x.classifiedResult.toString)).
+    foldRight("")((i, s) => s + i.toString + "\n")
 }
 
 
@@ -749,14 +792,15 @@ Usage:
     for(i <- 1 to 8) println
     println("Test Done")
     println(runner.GQ_total + " " + runner.VQ_current_total)
-    val txt = "\n\n" + string_with_bar() + "\n" + runner.GQR_to_string +
-    "\n\n" + string_with_bar() + "\n" + runner.VQR_to_string +
-    "\n\n" + string_with_bar() + "\n" + runner.VQR_to_string_short
-    import java.nio.file.{Paths, Files}
-    import java.nio.charset.StandardCharsets
-    Files.write(Paths.get(llvmberry_logics.output_result_dir + "/test.report"),
-      txt.getBytes(StandardCharsets.UTF_8))
-
+    val summary_txt =
+      runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
+    runner.VQR_to_matrix + "\n\n" + string_with_bar() + "\n" +
+    runner.VQR_to_row
+    val detail_txt =
+      string_with_bar("GQR result") + "\n\n" + runner.GQR_to_list + "\n\n" +
+    string_with_bar("VQR result") + "\n\n" + runner.VQR_to_list + "\n\n"
+    write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
+    write_to_file(detail_txt, new File(llvmberry_logics.output_result_dir + "/report.detail"))
     //TODO print actual list
   }
 }
