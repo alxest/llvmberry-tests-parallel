@@ -261,7 +261,8 @@ object LLVMBerryLogics {
   val NOT_PLAINS: List[String] = s"src.ll tgt.ll $OUT_NAME.ll".split(" ").toList
 
   def get_ll_bases(dir_name: String): List[String] = {
-    val ret = exec(s"ls ${dir_name}/**/*.ll")._2.split("\n").filterNot{x =>
+    val cmd = s"find ${dir_name} -name \\*.ll"
+    val ret = exec(cmd)._2.split("\n").filterNot{x =>
       // MUST split with '.', not "." or it is matched to wild card or something
       val y = x.split('.')
       y.size >= 2 && NOT_PLAINS.contains(y.takeRight(2).mkString("."))
@@ -659,16 +660,16 @@ Usage:
 --opt-path <path>:
     Set path of the "opt".
     *NOTE*
-    By specifying this value, it will not get commit/patch info of lib/llvm.
-    Which means the test result will not be self-contained.
-    Re-constructing the same setting just from the test result will not be able.
+    By specifying this value, the script will not get commit/patch info of lib/llvm.
+    Which means the test result dir will not be self-contained.
+    Re-constructing the same setting just from the test result dir will not be able.
 
 --vali-path <path>:
     Set path of the validator, "main.native".
     *NOTE*
-    By specifying this value, it will not get commit/patch info of lib/llvm.
-    Which means the test result will not be self-contained.
-    Re-constructing the same setting just from the test result will not be able.
+    By specifying this value, the script will not get commit/patch info of lib/llvm.
+    Which means the test result dir will not be self-contained.
+    Re-constructing the same setting just from the test result dir will not be able.
 
 -a, --opt-arg <string>:
     Set parameter used in opt.
