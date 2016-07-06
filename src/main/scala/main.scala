@@ -572,7 +572,8 @@ class TestRunner(
       s.updated(i.optName, trans)
     }
 
-    table_filled.foldRight("")((x, s) => s + row_to_string(x._1)(x._2) + "\n")
+    table_filled.toList.sortBy(_._1).reverse.
+      foldRight("")((x, s) => s + row_to_string(x._1)(x._2) + "\n")
   }
 
   def VQR_to_row: String = {
@@ -762,20 +763,21 @@ Usage:
       val simplberry_path = option_map.get('s)
       val opt_path = option_map.get('optpath)
       val vali_path = option_map.get('valipath)
-      val t0 = mkLLVMBerryLogics(simplberry_path)
+      val t0 = mkLLVMBerryLogics
       val t1 =
         (simplberry_path, opt_path, vali_path) match {
           case (Some(spth), None, None) =>
             val opt_path = spth + "/.build/llvm-obj/bin/opt"
             val vali_path = spth + "/ocaml_refact/main.native"
-            t0(opt_path)(vali_path)
+            t0(Some(spth))(opt_path)(vali_path)
           case (None, Some(opth), Some(vpth)) =>
-            t0(opth)(vpth)
+            t0(None)(opth)(vpth)
           case (None, None, None) =>
-            val spth = exec("cd .. && pwd")._2
+            val spth: String = exec("cd .. && pwd")._2.stripLineEnd
             val opt_path = spth + "/.build/llvm-obj/bin/opt"
             val vali_path = spth + "/ocaml_refact/main.native"
-            t0(opt_path)(vali_path)
+            println(spth)
+            t0(Some(spth))(opt_path)(vali_path)
           case _ => println("""Only three cases are possible.
 1. Only specify simplberry path
 2. Only specify opt_path and vali_path
@@ -814,8 +816,10 @@ Usage:
     println(llvmberry_logics.output_result_dir)
     println ; println ; println(string_with_bar())
     println("Start Script")
-    llvmberry_logics.compile
-    println("Compile Done")
+    if(llvmberry_logics.simplberry_path.isDefined) {
+      llvmberry_logics.compile
+      println("Compile Done")
+    }
     // llvmberry_logics.cleanByProducts
     // println("cleanByProducts Done")
     for(i <- 1 to 12) println
@@ -825,8 +829,8 @@ Usage:
     println(runner.GQ_total + " " + runner.VQ_current_total)
     val summary_txt =
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
-    runner.VQR_to_matrix + "\n\n" + string_with_bar() + "\n" +
-    runner.VQR_to_row
+    runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
+    runner.VQR_to_matrix
     val detail_txt =
       string_with_bar() + "\n" + string_with_bar("Generate Result") + "\n" + string_with_bar() + "\n\n" +
     runner.GQR_to_list + "\n\n" +
