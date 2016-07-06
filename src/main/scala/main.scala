@@ -834,6 +834,10 @@ Usage:
     for(i <- 1 to 8) println
     println("Test Done")
     println(runner.GQ_total + " " + runner.VQ_current_total)
+
+    //TODO separate report writing
+    //it is more fault tolerant
+    //also we may want to see report during main script is going
     val summary_txt =
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
