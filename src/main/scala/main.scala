@@ -175,6 +175,11 @@ opt and main.native while --simplberry-path is not specified.""")
       val tgt = triple_base + ".tgt.bc"
       val hint = triple_base + ".hint.json"
 
+      TimeChecker.runWithClock("V#lowerswitch") {
+        exec(s"opt -lowerswitch ${src} -o ${src}")
+        exec(s"opt -lowerswitch ${tgt} -o ${tgt}")
+      }
+
       def get_cmd(debug: Boolean): String =
         s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
 
