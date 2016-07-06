@@ -540,7 +540,9 @@ class TestRunner(
   }
 
   def row_to_string[A](row_name: String)(table: Map[A, Int]): String = {
-    val t0 = row_name.padTo(20, ' ') + " ---->   "
+    val sum = table.values.sum
+    val t0 = row_name.padTo(20, ' ') + s"(${sum})".padTo(10, ' ') +
+    " ---->   "
     val t1 = table.foldRight(t0)((i, s) =>
       s + (if(i._2 != 0) i.toString else "").padTo(20, ' ') + " ")
     t1
