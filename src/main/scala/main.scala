@@ -1,5 +1,6 @@
 import sys.process._
 import java.io.File
+import scala.annotation.tailrec
 
 object CommonLogics {
 
@@ -482,6 +483,7 @@ class TestRunner(
 
   class MyThread extends Thread {
     override def run {
+      @tailrec
       def runner(): Unit = {
         print_progress
         fetch_next_job match {
