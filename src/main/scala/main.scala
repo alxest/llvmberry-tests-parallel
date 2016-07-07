@@ -158,13 +158,13 @@ opt and main.native while --simplberry-path is not specified.""")
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
-      if(gres != LLVMBerryLogics.GSuccess) {
+      // if(gres != LLVMBerryLogics.GSuccess) {
         val txt =
           string_with_bar("CMD") + "\n" + cmd + "\n\n" +
         string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
         string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
         write_to_file(txt, new File(ll_base + ".result"))
-      }
+      // }
       gres
     }
   }
@@ -800,7 +800,7 @@ Usage:
         val ls = exec("ls")._2.split('\n')
         val y = input_test_dir.split('/').last
         def go(i: Int): String = {
-          val x = "test_result#" + y + "#" + i
+          val x = "test_result." + y + "." + i
           if(ls.contains(x))
             go(i+1)
           else x
