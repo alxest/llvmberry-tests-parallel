@@ -176,16 +176,16 @@ opt and main.native while --simplberry-path is not specified.""")
       val tgt = triple_base + ".tgt.bc"
       val hint = triple_base + ".hint.json"
 
-      TimeChecker.runWithClock("V#lowerswitch") {
+      TimeChecker.runWithClock("V#l-swtch") {
         exec(s"opt -lowerswitch ${src} -o ${src}")
         exec(s"opt -lowerswitch ${tgt} -o ${tgt}")
       }
 
-      def get_cmd(debug: Boolean): String =
-        s"${main_native_path} ${if(debug) "-d" else ""} ${src} ${tgt} ${hint}"
+      def get_cmd(dbg: Boolean): String =
+        s"${main_native_path} ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
 
-      lazy val cmd_no_debug = get_cmd(false)
-      lazy val cmd_debug = get_cmd(true)
+      lazy val cmd_no_dbg = get_cmd(false)
+      lazy val cmd_dbg = get_cmd(true)
 
       def llvm_dis =
         TimeChecker.runWithClock("V#llvm_dis") {
@@ -193,8 +193,8 @@ opt and main.native while --simplberry-path is not specified.""")
           exec(s"llvm-dis ${tgt}")
         }
 
-      def remove_triple =
-        TimeChecker.runWithClock("V#remove triple") {
+      def rm_triple =
+        TimeChecker.runWithClock("V#rm_triple") {
           (new File(src)).delete
           (new File(tgt)).delete
           (new File(hint)).delete
@@ -202,42 +202,56 @@ opt and main.native while --simplberry-path is not specified.""")
 
       val vres = validate_strategy match {
         case "f" =>
-          val vres = classifyValidateResult(exec(cmd_no_debug))
+          val vres = classifyValidateResult(exec(cmd_no_dbg))
           if(vres == LLVMBerryLogics.VSuccess)
-            remove_triple
+            rm_triple
           vres
-        case "s" =>
-          val res = exec(cmd_debug)
-          val vres = classifyValidateResult(res)
-          if(vres == LLVMBerryLogics.VSuccess)
-            remove_triple
-          else {
-            llvm_dis
-            val txt =
-              string_with_bar("CMD") + "\n" + cmd_debug + "\n\n" +
-            string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-            string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-            write_to_file(txt, new File(triple_base + ".result"))
-          }
-          vres
+        // case "s" =>
+        //   val res = exec(cmd_dbg)
+        //   val vres = classifyValidateResult(res)
+        //   if(vres == LLVMBerryLogics.VSuccess)
+        //     rm_triple
+        //   else {
+        //     llvm_dis
+        //     val txt =
+        //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
+        //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+        //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+        //     write_to_file(txt, new File(triple_base + ".result"))
+        //   }
+        //   vres
         case "d" =>
           val vres =
-            TimeChecker.runWithClock("V#no_debug") {
-              classifyValidateResult(exec(cmd_no_debug))
+            TimeChecker.runWithClock("V#no_dbg") {
+              classifyValidateResult(exec(cmd_no_dbg))
             }
 
           if(vres == LLVMBerryLogics.VSuccess)
-            remove_triple
+            rm_triple
           else {
-            val res =
-              TimeChecker.runWithClock("V#debug") {
-                exec(cmd_debug)
-              }
-            val txt =
-              string_with_bar("CMD") + "\n" + cmd_debug + "\n\n" +
-            string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-            string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-            write_to_file(txt, new File(triple_base + ".result"))
+            //source , sink
+            // val proc: ProcessBuilder = stringToProcess(cmd_dbg)
+            TimeChecker.runWithClock("V#dbg") {
+              stringSeqToProcess(
+                Seq("/bin/sh",
+                  "-c",
+                  "${cmd_dbg} 2> ${triple_base}.dbg_result")).!
+              // val boo = s"/bin/sh -c ${cmd_dbg} 2> ${triple_base}.dbg_result"
+              // println(boo)
+              // stringToProcess(boo).!
+              // val proc: ProcessBuilder = stringToProcess(cmd_dbg)
+              // (stringToProcess("ls") #> new File("tmp")).!
+            }
+
+            // val res =
+            //   TimeChecker.runWithClock("V#dbg") {
+            //     exec(cmd_dbg)
+            //   }
+            // val txt =
+            //   string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
+            // string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+            // string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+            // write_to_file(txt, new File(triple_base + ".result"))
           }
           vres
       }
@@ -528,7 +542,7 @@ class TestRunner(
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
-        (1 to 6) foreach { _ => goPreviousLine }
+        (1 to 7) foreach { _ => goPreviousLine }
         println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
           format_double(GQ_estimated_ETA))
         println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
@@ -537,7 +551,9 @@ class TestRunner(
         println(GQR_to_row)
         println(VQR_to_row)
         // println(TimeChecker.data)
-        println(TimeChecker.getPercentData)
+        val dat = TimeChecker.getPercentData
+        val dat_ = dat.splitAt(dat.size/2)
+        println(dat_._1 + "\n" + dat_._2)
       }
     }
   }
