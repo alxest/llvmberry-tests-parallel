@@ -220,12 +220,18 @@ opt and main.native while --simplberry-path is not specified.""")
           }
           vres
         case "d" =>
-          val vres = classifyValidateResult(exec(cmd_no_debug))
+          val vres =
+            TimeChecker.runWithClock("V#no_debug") {
+              classifyValidateResult(exec(cmd_no_debug))
+            }
 
           if(vres == LLVMBerryLogics.VSuccess)
             remove_triple
           else {
-            val res = exec(cmd_debug)
+            val res =
+              TimeChecker.runWithClock("V#debug") {
+                exec(cmd_debug)
+              }
             val txt =
               string_with_bar("CMD") + "\n" + cmd_debug + "\n\n" +
             string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
@@ -827,8 +833,6 @@ Usage:
       llvmberry_logics.compile
       println("Compile Done")
     }
-    // llvmberry_logics.cleanByProducts
-    // println("cleanByProducts Done")
     for(i <- 1 to 12) println
     runner.run
     for(i <- 1 to 8) println
