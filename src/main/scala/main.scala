@@ -751,7 +751,7 @@ Usage:
         case ("-v" | "--validate-strategy") :: value :: tail =>
           nextOption(map ++ Map('v -> value), tail)
         case ("-j" | "--jobs") :: value :: tail =>
-          nextOption(map ++ Map('v -> value), tail)
+          nextOption(map ++ Map('j -> value), tail)
         case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
