@@ -269,15 +269,10 @@ object LLVMBerryLogics {
   case object VUnknown extends VResult
 
   val OUT_NAME = "output"
-  val NOT_PLAINS: List[String] = s"src.ll tgt.ll $OUT_NAME.ll".split(" ").toList
 
   def get_ll_bases(dir_name: String): List[String] = {
     val cmd = s"find ${dir_name} -name \\*.ll"
-    val ret = exec(cmd)._2.split("\n").filterNot{x =>
-      // MUST split with '.', not "." or it is matched to wild card or something
-      val y = x.split('.')
-      y.size >= 2 && NOT_PLAINS.contains(y.takeRight(2).mkString("."))
-    }.map(remove_extensions(1))
+    val ret = exec(cmd)._2.split("\n").map(remove_extensions(1))
     ret.toList
     // scala.util.Random.shuffle(ret.toList)
   }
