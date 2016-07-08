@@ -1,6 +1,7 @@
 import sys.process._
 import java.io.File
 import scala.annotation.tailrec
+// import org.scalatest._
 
 object CommonLogics {
 
@@ -879,13 +880,13 @@ Usage:
 
 
 
-val mb = 1024*1024
-val runtime = Runtime.getRuntime
-println("** Used Memory:  " + (runtime.totalMemory - runtime.freeMemory) / mb)
-println("** Free Memory:  " + runtime.freeMemory / mb)
-println("** Total Memory: " + runtime.totalMemory / mb)
-println("** Max Memory:   " + runtime.maxMemory / mb)
-for(_ <- 1 to 10) println
+// val mb = 1024*1024
+// val runtime = Runtime.getRuntime
+// println("** Used Memory:  " + (runtime.totalMemory - runtime.freeMemory) / mb)
+// println("** Free Memory:  " + runtime.freeMemory / mb)
+// println("** Total Memory: " + runtime.totalMemory / mb)
+// println("** Max Memory:   " + runtime.maxMemory / mb)
+// for(_ <- 1 to 10) println
 
-MainScript.main(args)
+// MainScript.main(args)
 
