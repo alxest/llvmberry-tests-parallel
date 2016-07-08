@@ -332,8 +332,7 @@ object LLVMBerryLogics {
       catch {
         case e:Throwable =>
           println(e)
-          println("Should Not Occur!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-          println("opt name does not exit!! --> " + triple_base)
+          println("json parsing error!!!!!!!!!!!!!!!!!!!" + triple_base)
           for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
           //just terminating here will only terminate one thread.
           //TODO create error logger?
