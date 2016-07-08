@@ -322,23 +322,24 @@ object LLVMBerryLogics {
   }
 
   def get_opt_name(triple_base: String): String = {
-    import scala.util.parsing.json._
-    try {
-    val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
-    val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
-    json.get("opt_name").get.asInstanceOf[String]
+    TimeChecker.runWithClock("get_opt_name") {
+      import scala.util.parsing.json._
+      try {
+        val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
+        val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
+        json.get("opt_name").get.asInstanceOf[String]
+      }
+      catch {
+        case e:Throwable =>
+          println(e)
+          println("Should Not Occur!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+          println("opt name does not exit!! --> " + triple_base)
+          for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+          //just terminating here will only terminate one thread.
+          //TODO create error logger?
+          "no opt name"
+      }
     }
-    catch {
-      case e:Throwable =>
-        println(e)
-        println("Should Not Occur!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        println("opt name does not exit!! --> " + triple_base)
-        for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        //just terminating here will only terminate one thread.
-        //TODO create error logger?
-        "no opt name"
-    }
-    //exception handling?
   }
 }
 
