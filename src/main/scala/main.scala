@@ -133,8 +133,6 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val main_native_path = initializer._3
   val opt_arg = option_map.get('a).getOrElse("-O2")
   val input_test_dir = option_map.get('i).get
-  val generate_strategy = option_map.get('g).getOrElse("d")
-  val validate_strategy = option_map.get('v).getOrElse("d")
 
   val output_result_dir: String = {
     val ls = exec("ls")._2.split('\n')
@@ -189,25 +187,58 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     write_status(s"${spth}/lib/vellvm",
       output_result_dir + "/vellvm.status")
   }
+}
 
-  def generate(ll_base: String): GResult = {
+object LLVMBerryLogics {
+  sealed class GResult
+  case object GSuccess extends GResult
+  case object GFail extends GResult
+
+  sealed class VResult
+  case object VSuccess extends VResult
+  case object VFail extends VResult
+  case object VAdmitted extends VResult
+  case object VAssertionFail extends VResult
+  case object VNotSupported extends VResult
+  case object VUnknown extends VResult
+
+  val OUT_NAME = "output"
+
+  def get_ll_bases(dir_name: String): List[String] = {
+    val cmd = s"find ${dir_name} -name \\*.ll"
+    val ret = exec(cmd)._2.split("\n").map(remove_extensions(1))
+    ret.toList
+    // scala.util.Random.shuffle(ret.toList)
+  }
+
+  def remove_extensions(n: Int)(x: String): String =
+    x.split('.').dropRight(n).mkString(".")
+
+  def get_triple_bases(ll_base: String): List[String] = {
+    val t = exec(s"ls ${ll_base}.*.*.src.bc")
+    if(t._1 == 0) t._2.split("\n").map(remove_extensions(2)).toList
+    else List()
+  }
+
+  def generate(opt_path: String, ll_base: String, generate_strategy: String): GResult = {
     TimeChecker.runWithClock("G") {
       val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
       // if(gres != LLVMBerryLogics.GSuccess) {
-        val txt =
-          string_with_bar("CMD") + "\n" + cmd + "\n\n" +
-        string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-        string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-        write_to_file(txt, new File(ll_base + ".result"))
+      val txt =
+        string_with_bar("CMD") + "\n" + cmd + "\n\n" +
+      string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+      string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+      write_to_file(txt, new File(ll_base + ".result"))
       // }
       gres
     }
   }
 
-  def validate(triple_base: String): VResult = {
+  def validate(main_native_path: String,
+    triple_base: String, validate_strategy: String): VResult = {
     TimeChecker.runWithClock("V") {
       val src = triple_base + ".src.bc"
       val tgt = triple_base + ".tgt.bc"
@@ -233,8 +264,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       def rm_triple =
         TimeChecker.runWithClock("V#rm_triple") {
           (new File(src)).delete
-          (new File(tgt)).delete
-          (new File(hint)).delete
+            (new File(tgt)).delete
+            (new File(hint)).delete
         }
 
       //TODO only redirecting stderr. Should update main.native
@@ -275,38 +306,6 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       }
       vres
     }
-  }
-}
-
-object LLVMBerryLogics {
-  sealed class GResult
-  case object GSuccess extends GResult
-  case object GFail extends GResult
-
-  sealed class VResult
-  case object VSuccess extends VResult
-  case object VFail extends VResult
-  case object VAdmitted extends VResult
-  case object VAssertionFail extends VResult
-  case object VNotSupported extends VResult
-  case object VUnknown extends VResult
-
-  val OUT_NAME = "output"
-
-  def get_ll_bases(dir_name: String): List[String] = {
-    val cmd = s"find ${dir_name} -name \\*.ll"
-    val ret = exec(cmd)._2.split("\n").map(remove_extensions(1))
-    ret.toList
-    // scala.util.Random.shuffle(ret.toList)
-  }
-
-  def remove_extensions(n: Int)(x: String): String =
-    x.split('.').dropRight(n).mkString(".")
-
-  def get_triple_bases(ll_base: String): List[String] = {
-    val t = exec(s"ls ${ll_base}.*.*.src.bc")
-    if(t._1 == 0) t._2.split("\n").map(remove_extensions(2)).toList
-    else List()
   }
 
   def classifyGenerateResult(x: (Int, String, String)): GResult = {
@@ -360,7 +359,7 @@ object LLVMBerryLogics {
 
 
 class TestRunner(
-  val llvmberry_logics: LLVMBerryLogics,
+  val test_dir: String,
   val option_map: Map[Symbol, String]) {
 
   import java.util.concurrent.atomic._
@@ -368,6 +367,8 @@ class TestRunner(
   import java.util.concurrent.atomic.AtomicReference
   import java.util.concurrent._
 
+  val generate_strategy = option_map.get('g).getOrElse("d")
+  val validate_strategy = option_map.get('v).getOrElse("d")
   val process_strategy = option_map.get('p).getOrElse("d")
   val num_threads = option_map.get('j).getOrElse("24").toInt
 
@@ -485,7 +486,8 @@ class TestRunner(
     TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val gres = llvmberry_logics.generate(ll_base)
+      val gres =
+        LLVMBerryLogics.generate(test_dir, generate_strategy, ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
@@ -499,7 +501,8 @@ class TestRunner(
       val t0 = System.currentTimeMillis
       val fileSize = (new File(triple_base + ".ll")).length
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
-      val vres = llvmberry_logics.validate(triple_base)
+      val vres =
+        LLVMBerryLogics.validate(test_dir, validate_strategy, triple_base)
       val t1 = System.currentTimeMillis
       new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres)
     }
@@ -530,7 +533,7 @@ class TestRunner(
 
   def run = {
     val ll_bases =
-      LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir)
+      LLVMBerryLogics.get_ll_bases(test_dir)
     ll_bases.foreach(GQ.offer(_))
     GQ_total = GQ.size
     val threads: IndexedSeq[Thread] =
@@ -807,8 +810,7 @@ Usage:
         println("Compile Done")
     }
     llvmberry_logics.copy_executable
-
-    val runner = new TestRunner(llvmberry_logics, option_map)
+    val runner = new TestRunner(llvmberry_logics.output_result_dir, option_map)
     for(i <- 1 to 12) println
     runner.run
     for(i <- 1 to 8) println
