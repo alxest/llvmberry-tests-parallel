@@ -99,23 +99,56 @@ import CommonLogics._
 
 
 
-class LLVMBerryLogics(
-  val simplberry_path: Option[String],
-  val opt_path: String,
-  val main_native_path: String,
-  val opt_arg: String,
-  val input_test_dir: String,
-  val output_result_dir: String,
-  val generate_strategy: String, //not used yet
-  val validate_strategy: String) {
+//get parameter and move to static object?
+class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   import LLVMBerryLogics._
 
-  // it seems I cannot put some code here..
-  // def this(x: Map[Symbol, String]) = {
-  //   this("", "", "", "", "", "") 
-  // }
+  val initializer = {
+    val simplberry_path = option_map.get('s)
+    val opt_path = option_map.get('optpath)
+    val vali_path = option_map.get('valipath)
+    (simplberry_path, opt_path, vali_path) match {
+      case (Some(spth), None, None) =>
+        val opt_path = spth + "/.build/llvm-obj/bin/opt"
+        val vali_path = spth + "/ocaml_refact/main.native"
+        (Some(spth), opt_path, vali_path)
+      case (None, Some(opth), Some(vpth)) =>
+        (None, opth, vpth)
+      case (None, None, None) =>
+        val spth: String = exec("cd .. && pwd")._2.stripLineEnd
+        val opt_path = spth + "/.build/llvm-obj/bin/opt"
+        val vali_path = spth + "/ocaml_refact/main.native"
+        (Some(spth), opt_path, vali_path)
+      case _ =>
+        Console.err.println("""Only three cases are possible.
+1. Only specify simplberry path
+2. Only specify opt_path and vali_path
+3. Do not speecify at all.
+""")
+        ???
+    }
+  }
 
-  //get parameter and move to static object?
+  val simplberry_path = initializer._1
+  val opt_path = initializer._2
+  val main_native_path = initializer._3
+  val opt_arg = option_map.get('a).getOrElse("-O2")
+  val input_test_dir = option_map.get('i).get
+  val generate_strategy = option_map.get('g).getOrElse("d")
+  val validate_strategy = option_map.get('v).getOrElse("d")
+
+  val output_result_dir = {
+    val ls = exec("ls")._2.split('\n')
+    val y = input_test_dir.split('/').last
+    def go(i: Int): String = {
+      val x = "test_result." + y + "." + i
+      if(ls.contains(x))
+        go(i+1)
+      else x
+    }
+    go(0)
+  }
+
   def compile = {
     simplberry_path match {
       case None => println("""Should not occur. Trying to compile
@@ -785,53 +818,7 @@ Usage:
 
   def main(args: Array[String]): Unit = {
     val option_map = parse_option(args)
-    def mkLLVMBerryLogics = (new LLVMBerryLogics(_, _, _, _, _, _, _, _)).curried
-    val llvmberry_logics = {
-      val simplberry_path = option_map.get('s)
-      val opt_path = option_map.get('optpath)
-      val vali_path = option_map.get('valipath)
-      val t0 = mkLLVMBerryLogics
-      val t1 =
-        (simplberry_path, opt_path, vali_path) match {
-          case (Some(spth), None, None) =>
-            val opt_path = spth + "/.build/llvm-obj/bin/opt"
-            val vali_path = spth + "/ocaml_refact/main.native"
-            t0(Some(spth))(opt_path)(vali_path)
-          case (None, Some(opth), Some(vpth)) =>
-            t0(None)(opth)(vpth)
-          case (None, None, None) =>
-            val spth: String = exec("cd .. && pwd")._2.stripLineEnd
-            val opt_path = spth + "/.build/llvm-obj/bin/opt"
-            val vali_path = spth + "/ocaml_refact/main.native"
-            println(spth)
-            t0(Some(spth))(opt_path)(vali_path)
-          case _ => println("""Only three cases are possible.
-1. Only specify simplberry path
-2. Only specify opt_path and vali_path
-3. Do not speecify at all.
-""")
-            ???
-       }
-      val opt_arg = option_map.get('a).getOrElse("-O2")
-      val t2 = t1(opt_arg)
-      val input_test_dir = option_map.get('i).get
-      val t3 = t2(input_test_dir)
-      val output_result_dir = {
-        val ls = exec("ls")._2.split('\n')
-        val y = input_test_dir.split('/').last
-        def go(i: Int): String = {
-          val x = "test_result." + y + "." + i
-          if(ls.contains(x))
-            go(i+1)
-          else x
-        }
-        go(0)
-      }
-      val t4 = t3(output_result_dir)
-      val t5 = t4(option_map.get('g).getOrElse("d"))
-      val t6 = t5(option_map.get('v).getOrElse("d"))
-      t6
-    }
+    val llvmberry_logics = new LLVMBerryLogics(option_map)
 
     exec(s"cp -R ${llvmberry_logics.input_test_dir} ${llvmberry_logics.output_result_dir}")
     val process_strategy = option_map.get('p).getOrElse("d")
