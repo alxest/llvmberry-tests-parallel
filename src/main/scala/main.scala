@@ -136,8 +136,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val generate_strategy = option_map.get('g).getOrElse("d")
   val validate_strategy = option_map.get('v).getOrElse("d")
 
-  val output_result_dir: Option[String] = {
-    val rgx = """test_result.*.(\d+)""".r
+  val output_result_dir: String = {
     val ls = exec("ls")._2.split('\n')
     val y = input_test_dir.split('/').last
     def go(i: Int): String = {
@@ -146,45 +145,45 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         go(i+1)
       else x
     }
-    Some(go(0))
+    go(0)
   }
 
-  def compile = {
-    simplberry_path match {
-      case None => println("""Should not occur. Trying to compile
-opt and main.native while --simplberry-path is not specified.""")
-      case Some(spth) =>
-        val generator_compile = exec(s"cd ${spth}/ && make opt -j24")
-        if(generator_compile._1 != 0) {
-          println("Compile Failed!")
-          println("stdout : " + generator_compile._2)
-          println("stderr : " + generator_compile._3)
-          assert(false)
-        }
-        val validator_compile = exec(s"cd ${spth}/ && make refact -j24")
-        if(validator_compile._1 != 0) {
-          println("Compile Failed!")
-          println("stdout : " + validator_compile._2)
-          println("stderr : " + validator_compile._3)
-          assert(false)
-        }
+  def copy_executable(res_dir: String) = {
+    exec(s"cp ${opt_path} ${res_dir}")
+    exec(s"cp ${main_native_path} ${res_dir}")
+  }
 
-        def write_status(git_path: String, write_path: String) = {
-          val commit = exec(s"cd ${git_path} && git show HEAD")._2
-          val diff = exec(s"cd ${git_path} && git diff HEAD")._2
-          val txt =
-            string_with_bar("COMMIT") + "\n" + commit + "\n\n" +
-          string_with_bar("DIFF") + "\n" + diff + "\n\n"
-          write_to_file(txt, new File(write_path))
-        }
-
-        write_status(s"${spth}/lib/llvm",
-          output_result_dir + "/llvm.status")
-        write_status(s"${spth}/",
-          output_result_dir + "/simplberry.status")
-        write_status(s"${spth}/lib/vellvm",
-          output_result_dir + "/vellvm.status")
+  def compile(spth: String) = {
+    val generator_compile = exec(s"cd ${spth}/ && make opt -j24")
+    if(generator_compile._1 != 0) {
+      println("Compile Failed!")
+      println("stdout : " + generator_compile._2)
+      println("stderr : " + generator_compile._3)
+      assert(false)
     }
+    val validator_compile = exec(s"cd ${spth}/ && make refact -j24")
+    if(validator_compile._1 != 0) {
+      println("Compile Failed!")
+      println("stdout : " + validator_compile._2)
+      println("stderr : " + validator_compile._3)
+      assert(false)
+    }
+
+    def write_status(git_path: String, write_path: String) = {
+      val commit = exec(s"cd ${git_path} && git show HEAD")._2
+      val diff = exec(s"cd ${git_path} && git diff HEAD")._2
+      val txt =
+        string_with_bar("COMMIT") + "\n" + commit + "\n\n" +
+      string_with_bar("DIFF") + "\n" + diff + "\n\n"
+      write_to_file(txt, new File(write_path))
+    }
+
+    write_status(s"${spth}/lib/llvm",
+      output_result_dir  + "/llvm.status")
+    write_status(s"${spth}/",
+      output_result_dir + "/simplberry.status")
+    write_status(s"${spth}/lib/vellvm",
+      output_result_dir + "/vellvm.status")
   }
 
   def generate(ll_base: String): GResult = {
@@ -801,9 +800,10 @@ Usage:
     println(llvmberry_logics.output_result_dir)
     println ; println ; println(string_with_bar())
     println("Start Script")
-    if(llvmberry_logics.simplberry_path.isDefined) {
-      llvmberry_logics.compile
-      println("Compile Done")
+    llvmberry_logics.simplberry_path match {
+      case Some(spth) =>
+        llvmberry_logics.compile(spth)
+        println("Compile Done")
     }
     for(i <- 1 to 12) println
     runner.run
