@@ -387,13 +387,15 @@ object LLVMBerryLogics {
 
 class TestRunner(
   val llvmberry_logics: LLVMBerryLogics,
-  val process_strategy: String,
-  val num_threads: Int) {
+  val option_map: Map[Symbol, String]) {
 
   import java.util.concurrent.atomic._
   import java.util.concurrent.atomic.AtomicLong
   import java.util.concurrent.atomic.AtomicReference
   import java.util.concurrent._
+
+  val process_strategy = option_map.get('p).getOrElse("d")
+  val jobs = option_map.get('j).getOrElse("24").toInt
 
   object Mutex
   sealed abstract class Job
@@ -821,9 +823,7 @@ Usage:
     val llvmberry_logics = new LLVMBerryLogics(option_map)
 
     exec(s"cp -R ${llvmberry_logics.input_test_dir} ${llvmberry_logics.output_result_dir}")
-    val process_strategy = option_map.get('p).getOrElse("d")
-    val jobs = option_map.get('j).getOrElse("24").toInt
-    val runner = new TestRunner(llvmberry_logics, process_strategy, jobs)
+    val runner = new TestRunner(llvmberry_logics, option_map)
 
 
     println(llvmberry_logics.simplberry_path)
