@@ -70,6 +70,7 @@ object CommonLogics {
     //Percent data is actually not that meaningful,
     //as it is not called mutually exclusive
     //Just for convenience
+    def getData = data
     def getPercentData = {
       val sum = data.values.foldLeft(0: Long)((s, i) => s + i)
       data.map(x => (x._1, format_double(100 * x._2.toDouble / sum) + "%"))
@@ -805,6 +806,8 @@ Usage:
       case Some(spth) =>
         llvmberry_logics.compile(spth)
         println("Compile Done")
+      case None =>
+        println("No simplberry path specified. Not compiling")
     }
     // llvmberry_logics.copy_executable
     /*
@@ -825,7 +828,12 @@ Usage:
 
     val runner = new TestRunner(llvmberry_logics, option_map)
     for(i <- 1 to 12) println
+    val t0 = System.currentTimeMillis()
     runner.run
+    println(TimeChecker.getData.mapValues(x =>
+      format_double(x.toDouble / runner.num_threads / 1000)))
+    val t1 = System.currentTimeMillis()
+    println((t1-t0).toDouble / 1000)
     for(i <- 1 to 8) println
     println("Test Done")
     println(runner.GQ_total + " " + runner.VQ_current_total)
@@ -857,15 +865,15 @@ Usage:
 
 
 
-// val mb = 1024*1024
-// val runtime = Runtime.getRuntime
-// println("** Used Memory:  " + (runtime.totalMemory - runtime.freeMemory) / mb)
-// println("** Free Memory:  " + runtime.freeMemory / mb)
-// println("** Total Memory: " + runtime.totalMemory / mb)
-// println("** Max Memory:   " + runtime.maxMemory / mb)
-// for(_ <- 1 to 10) println
+val mb = 1024*1024
+val runtime = Runtime.getRuntime
+println("** Used Memory:  " + (runtime.totalMemory - runtime.freeMemory) / mb)
+println("** Free Memory:  " + runtime.freeMemory / mb)
+println("** Total Memory: " + runtime.totalMemory / mb)
+println("** Max Memory:   " + runtime.maxMemory / mb)
+for(_ <- 1 to 10) println
 
-// val t0 = System.currentTimeMillis()
-// MainScript.main(args)
-// val t1 = System.currentTimeMillis()
-// println((t1-t0).toDouble / 1000)
+val t0 = System.currentTimeMillis()
+MainScript.main(args)
+val t1 = System.currentTimeMillis()
+println((t1-t0).toDouble / 1000)
