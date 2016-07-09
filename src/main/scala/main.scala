@@ -276,15 +276,15 @@ opt and main.native while --simplberry-path is not specified.""")
               // (stringToProcess("ls") #> new File("tmp")).!
             }
 
-            // val res =
-            //   TimeChecker.runWithClock("V#dbg") {
-            //     exec(cmd_dbg)
-            //   }
-            // val txt =
-            //   string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
-            // string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-            // string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-            // write_to_file(txt, new File(triple_base + ".result"))
+          //   TimeChecker.runWithClock("V#dbg") {
+          //     val res =
+          //       exec(cmd_dbg)
+          //     val txt =
+          //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
+          //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+          //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+          //     write_to_file(txt, new File(triple_base + ".result"))
+          //   }
           }
           vres
       }
@@ -864,5 +864,7 @@ Usage:
 // println("** Max Memory:   " + runtime.maxMemory / mb)
 // for(_ <- 1 to 10) println
 
+// val t0 = System.currentTimeMillis()
 // MainScript.main(args)
-
+// val t1 = System.currentTimeMillis()
+// println((t1-t0).toDouble / 1000)
