@@ -316,14 +316,15 @@ object LLVMBerryLogics {
   }
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
-    def f(y: String) = x._3.split('\n').head.contains(y)
+    def f(y: String) = x._2.split('\n').head.contains(y)
+    def g(y: String) = x._3.split('\n').head.contains(y)
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
     else if(f("Validation Admitted.")) VAdmitted
     else if(f("Assertion failed.")) VAssertionFail
-    else if(f("Fatal error: exception Failure") &&
-      (f("Not_Supported") || f("is not supported for now."))) VNotSupported
+    else if(g("Fatal error: exception Failure") &&
+      (g("Not_Supported") || g("is not supported for now."))) VNotSupported
     // else if(f("llvm-obj/bindings/ocaml/llvm/llvm_ocaml.c:1388: llvm_instr_get_opcode: Assertion `o <= LLVMLandingPad' failed."))
     //   "Ocaml Binding Fail"
     else
