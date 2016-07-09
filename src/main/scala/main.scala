@@ -45,7 +45,6 @@ object CommonLogics {
       ProcessLogger(o.append(_).append("\n"), e.append(_).append("\n"))
     // val retCode = stringToProcess("/bin/sh -c" + cmd) ! myProcessLogger // this does not work..
     //http://alvinalexander.com/scala/how-to-handle-wildcard-characters-running-external-commands
-
     val retCode =
       stringSeqToProcess(Seq("/bin/sh", "-c", cmd)) ! myProcessLogger
     (retCode, o.result(), e.result())
@@ -292,16 +291,6 @@ opt and main.native while --simplberry-path is not specified.""")
       vres
     }
   }
-
-  //this is deprecated, but leave it for now
-  // def cleanByProducts = {
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.src.bc" -delete""")
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.tgt.bc" -delete""")
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.src.ll" -delete""")
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.tgt.ll" -delete""")
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.output.ll" -delete""")
-  //   exec(s"""cd ${input_test_dir} && find . -name "*.result" -delete""")
-  // }
 }
 
 object LLVMBerryLogics {
@@ -395,7 +384,7 @@ class TestRunner(
   import java.util.concurrent._
 
   val process_strategy = option_map.get('p).getOrElse("d")
-  val jobs = option_map.get('j).getOrElse("24").toInt
+  val num_threads = option_map.get('j).getOrElse("24").toInt
 
   object Mutex
   sealed abstract class Job
