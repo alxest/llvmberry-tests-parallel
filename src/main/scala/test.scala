@@ -91,6 +91,20 @@ object abc extends App {
 // 62.249
 
   }
+
+  else if(args.size == 2) {
+    // fileToProcess(new File("b"))
+    // stringSeqToProcess(Seq("/bin/sh", "-c", "ls")).!
+    println(cmd)
+    type a = ProcessBuilder
+    stringSeqToProcess(Seq("/bin/sh", "-c", cmd)).
+      #>(new File("/opt/devel/youngju.song/rabbitmq/my_script/scala/src/main/scala" + "/c")).!
+
+//     [youngju.song@cn04]/opt/devel/youngju.song/rabbitmq/my_script/scala/src/main/scala% scala test.scala abc def
+// ruby /opt/devel/youngju.song/rabbitmq/my_script/scala/src/main/scala/simple.rb
+// 48.313
+
+  }
   val t1 = System.currentTimeMillis()
   println((t1 - t0) * 1.0 / 1000)
 }

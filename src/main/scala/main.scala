@@ -262,18 +262,11 @@ opt and main.native while --simplberry-path is not specified.""")
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
           else {
-            //source , sink
-            // val proc: ProcessBuilder = stringToProcess(cmd_dbg)
             TimeChecker.runWithClock("V#dbg") {
               stringSeqToProcess(
                 Seq("/bin/sh",
                   "-c",
                   "${cmd_dbg} 2> ${triple_base}.dbg_result")).!
-              // val boo = s"/bin/sh -c ${cmd_dbg} 2> ${triple_base}.dbg_result"
-              // println(boo)
-              // stringToProcess(boo).!
-              // val proc: ProcessBuilder = stringToProcess(cmd_dbg)
-              // (stringToProcess("ls") #> new File("tmp")).!
             }
 
           //   TimeChecker.runWithClock("V#dbg") {
