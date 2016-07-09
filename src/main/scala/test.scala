@@ -106,13 +106,33 @@ object abc extends App {
 
   }
 
-  "a" match {
-    case "a" => println("gggggggggggggggggggggGG")
-    case "a" => println("gggggggggggggggggggggGG")
-    case "a" | "b" => println("gggggggggggggggggggggGG")
-  }
+  // "a" match {
+  //   case "a" => println("gggggggggggggggggggggGG")
+  //   case "a" => println("gggggggggggggggggggggGG")
+  //   case "a" | "b" => println("gggggggggggggggggggggGG")
+  // }
   val t1 = System.currentTimeMillis()
   println((t1 - t0) * 1.0 / 1000)
 }
 
-abc.main(args)
+object regexRunner extends App {
+  // val rgx = """test_result\.(\w)\.""".r
+  val rgx = """test_result[.](.*)[.](\d+)""".r
+  def r(x: String) = x match {
+    // case rgx(_*) => println("Bound")
+    case rgx(dir, num) => println("Bound : " + s"${dir} ||||||||||| ${num}")
+    case _ => println("No match")
+  }
+  r("""test_result.""")
+  r("""test_result..""")
+  r("""test_result.tt""" )
+  r("""test_result.tt.""" )
+  r("""test_result.llvm_regression_test.""" )
+  r("""test_result.llvm_regression_test.0""" )
+  r("""test_result.llvm_regression_test.22""" )
+  r("""test_result.llvm_regression_test.2cucu2""" )
+  r("""test_result.llvm_regression_test.cucu22""" )
+  r("""test_result.llvm_regression_test.22cucu""" )
+}
+
+regexRunner.main(args)

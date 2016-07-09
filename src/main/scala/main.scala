@@ -136,7 +136,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val generate_strategy = option_map.get('g).getOrElse("d")
   val validate_strategy = option_map.get('v).getOrElse("d")
 
-  val output_result_dir = {
+  val output_result_dir: Option[String] = {
+    val rgx = """test_result.*.(\d+)""".r
     val ls = exec("ls")._2.split('\n')
     val y = input_test_dir.split('/').last
     def go(i: Int): String = {
@@ -145,7 +146,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         go(i+1)
       else x
     }
-    go(0)
+    Some(go(0))
   }
 
   def compile = {
