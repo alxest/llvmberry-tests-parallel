@@ -806,7 +806,22 @@ Usage:
         llvmberry_logics.compile(spth)
         println("Compile Done")
     }
-    llvmberry_logics.copy_executable
+    // llvmberry_logics.copy_executable
+    /*
+     I added copy_executable for the following use case:
+     Start test, abort, and then restart the test in the same dir.
+     However I think that may not occur frequently...
+     Also that may require separation of llvmberry_logics from TestRunner
+     It may make code more dirty than clean.
+
+     If Separation is done well, use case may be:
+     1. given input_dir => copy it into test_dir
+     2. given test_dir => do test
+     3. given test_dir => show statistics
+     It may require recording all the options(process_strategy) in some file,
+     so that it can be transfered from 1 to 2.
+     It will make it much more tedious...
+     */
 
     val runner = new TestRunner(llvmberry_logics, option_map)
     for(i <- 1 to 12) println
