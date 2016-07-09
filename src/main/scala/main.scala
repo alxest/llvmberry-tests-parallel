@@ -148,9 +148,13 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     go(0)
   }
 
-  def copy_executable(res_dir: String) = {
-    exec(s"cp ${opt_path} ${res_dir}")
-    exec(s"cp ${main_native_path} ${res_dir}")
+  def copy_input_dir = {
+    exec(s"cp -R ${input_test_dir} ${output_result_dir}")
+  }
+
+  def copy_executable = {
+    exec(s"cp ${opt_path} ${output_result_dir}")
+    exec(s"cp ${main_native_path} ${output_result_dir}")
   }
 
   def compile(spth: String) = {
@@ -792,10 +796,7 @@ Usage:
     val option_map = parse_option(args)
     val llvmberry_logics = new LLVMBerryLogics(option_map)
 
-    exec(s"cp -R ${llvmberry_logics.input_test_dir} ${llvmberry_logics.output_result_dir}")
-    val runner = new TestRunner(llvmberry_logics, option_map)
-
-
+    llvmberry_logics.copy_input_dir
     println(llvmberry_logics.simplberry_path)
     println(llvmberry_logics.output_result_dir)
     println ; println ; println(string_with_bar())
@@ -805,6 +806,9 @@ Usage:
         llvmberry_logics.compile(spth)
         println("Compile Done")
     }
+    llvmberry_logics.copy_executable
+
+    val runner = new TestRunner(llvmberry_logics, option_map)
     for(i <- 1 to 12) println
     runner.run
     for(i <- 1 to 8) println
