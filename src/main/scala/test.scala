@@ -105,6 +105,12 @@ object abc extends App {
 // 48.313
 
   }
+
+  "a" match {
+    case "a" => println("gggggggggggggggggggggGG")
+    case "a" => println("gggggggggggggggggggggGG")
+    case "a" | "b" => println("gggggggggggggggggggggGG")
+  }
   val t1 = System.currentTimeMillis()
   println((t1 - t0) * 1.0 / 1000)
 }

@@ -233,26 +233,30 @@ opt and main.native while --simplberry-path is not specified.""")
           (new File(hint)).delete
         }
 
+      //TODO only redirecting stderr. Should update main.native
+      def run_dbg =
+        TimeChecker.runWithClock("V#dbg") {
+          stringSeqToProcess(
+            Seq("/bin/sh",
+              "-c",
+              "${cmd_dbg} 2> ${triple_base}.dbg_result")).!
+        }
+      //   TimeChecker.runWithClock("V#dbg") {
+      //     val res =
+      //       exec(cmd_dbg)
+      //     val txt =
+      //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
+      //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+      //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+      //     write_to_file(txt, new File(triple_base + ".result"))
+      //   }
+
       val vres = validate_strategy match {
         case "f" =>
           val vres = classifyValidateResult(exec(cmd_no_dbg))
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
           vres
-        // case "s" =>
-        //   val res = exec(cmd_dbg)
-        //   val vres = classifyValidateResult(res)
-        //   if(vres == LLVMBerryLogics.VSuccess)
-        //     rm_triple
-        //   else {
-        //     llvm_dis
-        //     val txt =
-        //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
-        //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-        //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-        //     write_to_file(txt, new File(triple_base + ".result"))
-        //   }
-        //   vres
         case "d" =>
           val vres =
             TimeChecker.runWithClock("V#no_dbg") {
@@ -261,24 +265,8 @@ opt and main.native while --simplberry-path is not specified.""")
 
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
-          else {
-            TimeChecker.runWithClock("V#dbg") {
-              stringSeqToProcess(
-                Seq("/bin/sh",
-                  "-c",
-                  "${cmd_dbg} 2> ${triple_base}.dbg_result")).!
-            }
-
-          //   TimeChecker.runWithClock("V#dbg") {
-          //     val res =
-          //       exec(cmd_dbg)
-          //     val txt =
-          //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
-          //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-          //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-          //     write_to_file(txt, new File(triple_base + ".result"))
-          //   }
-          }
+          else
+            run_dbg
           vres
       }
       vres
@@ -746,9 +734,9 @@ Usage:
 -v, --validate-strategy <f|s|d>:
     Set validating strategy.
     "f": Fast. Always run without "-d" option.
-    "s": Slow. Always run with "-d" option, and llvm-dis to src/tgt.
     "d": Try with without "-d" option, and then if validation has not succeeded,
-         re-run with "-d" option. It does not run llvm-dis.
+         re-run with "-d" option. Its result will be redirected to
+    ".debug_result" file. It does not run llvm-dis.
     Default value is "d".
 
 -j, --jobs <int>:
