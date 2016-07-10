@@ -244,7 +244,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           stringSeqToProcess(
             Seq("/bin/sh",
               "-c",
-              "${cmd_dbg} 2> ${triple_base}.dbg_result")).!
+              s"${cmd_dbg} 2> ${triple_base}.dbg_result")).!
         }
       //   TimeChecker.runWithClock("V#dbg") {
       //     val res =
@@ -256,23 +256,21 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       //     write_to_file(txt, new File(triple_base + ".result"))
       //   }
 
-      val vres = validate_strategy match {
-        case "f" =>
-          val vres = classifyValidateResult(exec(cmd_no_dbg))
-          if(vres == LLVMBerryLogics.VSuccess)
-            rm_triple
-          vres
-        case "d" =>
-          val vres =
-            TimeChecker.runWithClock("V#no_dbg") {
-              classifyValidateResult(exec(cmd_no_dbg))
-            }
+      val res = exec(cmd_no_dbg)
+      val vres = classifyValidateResult(res)
+      val txt =
+        string_with_bar("CMD") + "\n" + cmd_no_dbg + "\n\n" +
+      string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
+      string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+      write_to_file(txt, new File(triple_base + ".result"))
+      if(vres == LLVMBerryLogics.VSuccess)
+        rm_triple
 
-          if(vres == LLVMBerryLogics.VSuccess)
-            rm_triple
-          else
+      validate_strategy match {
+        case "f" =>
+        case "d" =>
+          if(vres == LLVMBerryLogics.VFail)
             run_dbg
-          vres
       }
       vres
     }
@@ -316,8 +314,8 @@ object LLVMBerryLogics {
   }
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
-    def f(y: String) = x._2.split('\n').head.contains(y)
-    def g(y: String) = x._3.split('\n').head.contains(y)
+    def f(y: String) = x._2.split('\n').last.contains(y)
+    def g(y: String) = x._3.split('\n').last.contains(y)
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
