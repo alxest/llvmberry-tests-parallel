@@ -244,7 +244,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           stringSeqToProcess(
             Seq("/bin/sh",
               "-c",
-              s"${cmd_dbg} 2> ${triple_base}.dbg_result")).!
+              s"${cmd_dbg} > /dev/null 2> ${triple_base}.dbg_result")).!
         }
       //   TimeChecker.runWithClock("V#dbg") {
       //     val res =
