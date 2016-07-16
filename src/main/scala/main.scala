@@ -263,9 +263,6 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
       string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
       write_to_file(txt, new File(triple_base + ".result"))
-      if(vres == LLVMBerryLogics.VSuccess)
-        rm_triple
-
       validate_strategy match {
         case "f" =>
         case "d" =>
@@ -274,6 +271,10 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         case "s" =>
           run_dbg
       }
+
+      if(vres == LLVMBerryLogics.VSuccess)
+        rm_triple
+
       vres
     }
   }
