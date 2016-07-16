@@ -265,15 +265,16 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       write_to_file(txt, new File(triple_base + ".result"))
       validate_strategy match {
         case "f" =>
+          if(vres == LLVMBerryLogics.VSuccess)
+            rm_triple
         case "d" =>
           if(vres == LLVMBerryLogics.VFail)
             run_dbg
+          if(vres == LLVMBerryLogics.VSuccess)
+            rm_triple
         case "s" =>
           run_dbg
       }
-
-      if(vres == LLVMBerryLogics.VSuccess)
-        rm_triple
 
       vres
     }
