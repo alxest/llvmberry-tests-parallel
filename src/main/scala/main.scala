@@ -271,6 +271,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         case "d" =>
           if(vres == LLVMBerryLogics.VFail)
             run_dbg
+        case "s" =>
+          run_dbg
       }
       vres
     }
@@ -315,7 +317,7 @@ object LLVMBerryLogics {
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
     def f(y: String) = x._2.split('\n').last.contains(y)
-    def g(y: String) = x._3.split('\n').last.contains(y)
+    def g(y: String) = x._3.split('\n').head.contains(y)
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
