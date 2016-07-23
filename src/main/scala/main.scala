@@ -110,14 +110,14 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     (simplberry_path, opt_path, vali_path) match {
       case (Some(spth), None, None) =>
         val opt_path = spth + "/.build/llvm-obj/bin/opt"
-        val vali_path = spth + "/ocaml_refact/main.native"
+        val vali_path = spth + "/ocaml/main.native"
         (Some(spth), opt_path, vali_path)
       case (None, Some(opth), Some(vpth)) =>
         (None, opth, vpth)
       case (None, None, None) =>
         val spth: String = exec("cd .. && pwd")._2.stripLineEnd
         val opt_path = spth + "/.build/llvm-obj/bin/opt"
-        val vali_path = spth + "/ocaml_refact/main.native"
+        val vali_path = spth + "/ocaml/main.native"
         (Some(spth), opt_path, vali_path)
       case _ =>
         Console.err.println("""Only three cases are possible.
@@ -166,7 +166,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       println("stderr : " + generator_compile._3)
       assert(false)
     }
-    val validator_compile = exec(s"cd ${spth}/ && make refact -j24")
+    val validator_compile = exec(s"cd ${spth}/ && make exec-quick -j24")
     if(validator_compile._1 != 0) {
       println("Compile Failed!")
       println("stdout : " + validator_compile._2)
