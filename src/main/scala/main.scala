@@ -323,8 +323,8 @@ object LLVMBerryLogics {
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
-    else if(f("Validation Admitted.")) VAdmitted
-    else if(f("Assertion failed.")) VAssertionFail
+    else if(f("Set to admitted.")) VAdmitted
+    else if(f("ret to fail.")) VAssertionFail
     else if(g("Fatal error: exception Failure") &&
       (g("Not_Supported") || g("is not supported for now."))) VNotSupported
     // else if(f("llvm-obj/bindings/ocaml/llvm/llvm_ocaml.c:1388: llvm_instr_get_opcode: Assertion `o <= LLVMLandingPad' failed."))
