@@ -166,7 +166,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       println("stderr : " + generator_compile._3)
       assert(false)
     }
-    val validator_compile = exec(s"cd ${spth}/ && make exec-quick -j24")
+    val validator_compile = exec(s"cd ${spth}/ && make exec-rsync -j24")
     if(validator_compile._1 != 0) {
       println("Compile Failed!")
       println("stdout : " + validator_compile._2)
@@ -324,7 +324,7 @@ object LLVMBerryLogics {
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
     else if(f("Set to admitted.")) VAdmitted
-    else if(f("ret to fail.")) VAssertionFail
+    else if(f("Set to fail.")) VAssertionFail
     else if(g("Fatal error: exception Failure") &&
       (g("Not_Supported") || g("is not supported for now."))) VNotSupported
     // else if(f("llvm-obj/bindings/ocaml/llvm/llvm_ocaml.c:1388: llvm_instr_get_opcode: Assertion `o <= LLVMLandingPad' failed."))
