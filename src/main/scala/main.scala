@@ -335,20 +335,19 @@ object LLVMBerryLogics {
 
   def get_opt_name(triple_base: String): String = {
     TimeChecker.runWithClock("get_opt_name") {
-      import scala.util.parsing.json._
+      //http://docs.scala-lang.org/tutorials/FAQ/stream-view-iterator
       try {
-        val hint = scala.io.Source.fromFile(triple_base + ".hint.json").mkString
-        val json = JSON.parseRaw(hint).get.asInstanceOf[JSONObject].obj
-        json.get("opt_name").get.asInstanceOf[String]
+        val tmp = scala.io.Source.fromFile(triple_base + ".hint.json").getLines.take(4)
+        val last_line = tmp.toList.last
+        //use option monad instead
+        if(last_line.split(":").size != 2) throw new Exception
+        val str = last_line.split(":")(1)
+        //really want to use just -2... personal library?
+        str.substring(2, str.size-2)
       }
       catch {
         case e:Throwable =>
-          println(e)
-          println("json parsing error!!!!!!!!!!!!!!!!!!!" + triple_base)
-          for(_ <- 1 to 20) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-          //just terminating here will only terminate one thread.
-          //TODO create error logger?
-          "no opt name"
+          "opt name parse error!!"
       }
     }
   }
