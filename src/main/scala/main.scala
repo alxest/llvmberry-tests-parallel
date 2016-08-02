@@ -373,6 +373,10 @@ class TestRunner(
 
   val process_strategy = option_map.get('p).getOrElse("d")
   val num_threads = option_map.get('j).getOrElse("24").toInt
+  val verbose = option_map.contains('verbose)
+
+  def print_verbose(x: String) =
+    if(verbose) Mutex.synchronized { println(s"[[THREAD#${Thread.currentThread().getId()}]]: ${x}") }
 
   object Mutex
   sealed abstract class Job
@@ -515,11 +519,15 @@ class TestRunner(
         print_progress
         fetch_next_job match {
           case GQJob(ll_base) =>
+            print_verbose("processGQ start -------> " + ll_base)
             val res = processGQ(ll_base)
+            print_verbose("processGQ end   <------- " + ll_base)
             Mutex.synchronized { GQR += res }
             runner
           case VQJob(triple_base) =>
+            print_verbose("processVQ start =======> " + triple_base)
             val res = processVQ(triple_base)
+            print_verbose("processVQ end   <======= " + triple_base)
             Mutex.synchronized { VQR += res }
             runner
           case NoJob => Thread.sleep(1000) ; runner
@@ -555,7 +563,7 @@ class TestRunner(
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
-        (1 to 7) foreach { _ => goPreviousLine }
+        if(!verbose) (1 to 7) foreach { _ => goPreviousLine }
         println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
           format_double(GQ_estimated_ETA))
         println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
@@ -749,6 +757,9 @@ Usage:
 -j, --jobs <int>:
     Set number of threads.
     Default value is 24.
+
+--verbose:
+    Set verbose mode. It may be useful for debugging the script.
   """
   //TODO llvm-dis path?
 
@@ -784,6 +795,8 @@ Usage:
           nextOption(map ++ Map('v -> value), tail)
         case ("-j" | "--jobs") :: value :: tail =>
           nextOption(map ++ Map('j -> value), tail)
+        case ("--verbose") :: tail =>
+          nextOption(map ++ Map('verbose -> ""), tail)
         case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
