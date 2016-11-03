@@ -192,9 +192,9 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       output_result_dir + "/vellvm.status")
   }
 
-  def generate(ll_base: String): GResult = {
+  def generate(ll_base: String): (GResult, (Double, Double, Double)) = {
     TimeChecker.runWithClock("G") {
-      val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
+      val cmd = s"${opt_path} -time-passes ${opt_arg} ${ll_base}.ll" +
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
@@ -205,7 +205,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
         write_to_file(txt, new File(ll_base + ".result"))
       // }
-      gres
+      (gres, parseTimeOutput(res._3))
     }
   }
 
@@ -315,6 +315,35 @@ object LLVMBerryLogics {
     else List()
   }
 
+  def parseTimeOutput(rawData: String) = {
+    val content = {
+      val tmp = rawData.split("\n")
+      val startIdx = tmp.toList.indexWhere(_.contains("... Pass execution timing report ..."))
+      tmp.drop(startIdx-1)
+    }
+    //slice: [)
+    var InstCombineTime = 0.0
+    var GVNTime = 0.0
+    var SROATime = 0.0
+    assert(content(content.length - 10).split("\\s+").last == "Total"
+      || { println(rawData) ; false })
+    val content2 = content.slice(6, content.length - 10).map{x =>
+      // val y = x.split("\\s+")
+      val y = x.split("[)]").map(_.trim)
+      val maxSize = y.size
+      assert(maxSize == 4 || maxSize == 5 ||
+        { println(x + "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData) ; false })
+      val time = y(maxSize-2).split(" ").head.toDouble
+      if(y(maxSize-1) == "Global Value Numbering") GVNTime += time
+      else if(y(maxSize-1) == "Combine redundant instructions") InstCombineTime += time
+      else if(y(maxSize-1) == "SROA") SROATime += time
+      // y.mkString("--------")
+      ()
+    }
+    (InstCombineTime, GVNTime, SROATime)
+  }
+
+
   def classifyGenerateResult(x: (Int, String, String)): GResult = {
     if(x._1 == 0) GSuccess
     else GFail
@@ -400,16 +429,38 @@ class TestRunner(
     //there should be spaces between them
   } //without val, it is private
 
+  object JobResult {
+    def columnNames = "baseName" + DELIMITER + "time"
+  }
+
   class GQJobResult(
     val base_name: String,
     val fileSize: Long,
     val time: Double,
+    val wallTimes: (Double, Double, Double),
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString + DELIMITER + fileSize + DELIMITER + generated
+      super.toString + DELIMITER +
+      wallTimes._1 + DELIMITER +
+      wallTimes._2 + DELIMITER +
+      wallTimes._3 + DELIMITER +
+      fileSize + DELIMITER +
+      generated + DELIMITER +
+      classifiedResult
     }
+  }
+
+  object GQJobResult {
+    def columnNames =
+      JobResult.columnNames + DELIMITER +
+    "wallTime-CombineInstructions" + DELIMITER +
+    "wallTime-GVN" + DELIMITER +
+    "wallTime-SROA" + DELIMITER +
+    "fileSize" + DELIMITER +
+    "generated" + DELIMITER +
+    "classifiedResult"
   }
 
   class VQJobResult(
@@ -420,8 +471,23 @@ class TestRunner(
     val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString + DELIMITER + fileSize._1 + DELIMITER + fileSize._2 + DELIMITER +
-      fileSize._3 + DELIMITER + optName
+      super.toString + DELIMITER +
+      fileSize._1 + DELIMITER +
+      fileSize._2 + DELIMITER +
+      fileSize._3 + DELIMITER +
+      optName + DELIMITER +
+      classifiedResult
+    }
+  }
+
+  object VQJobResult {
+    def columnNames = {
+      JobResult.columnNames + DELIMITER +
+      "srcSize" + DELIMITER +
+      "tgtSize" + DELIMITER +
+      "hintSize" + DELIMITER +
+      "optName" + DELIMITER +
+      "classifiedResult"
     }
   }
   val GQ = new ConcurrentLinkedQueue[String]
@@ -489,12 +555,12 @@ class TestRunner(
     TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val gres = llvmberry_logics.generate(ll_base)
+      val (gres, wallTimes) = llvmberry_logics.generate(ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
-      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, tri_bases.size, gres)
+      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, wallTimes, tri_bases.size, gres)
     }
   }
 
@@ -647,9 +713,8 @@ class TestRunner(
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
   def GQR_to_list: String = {
-    "baseName" + DELIMITER + "time" + DELIMITER +
-    "fileSize" + DELIMITER + "generated" + DELIMITER + "classifiedResult" + "\n" +
-    GQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
+    GQJobResult.columnNames + "\n" +
+    GQR.foldRight("")((i, s) => s + i.toString + "\n")
   }
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
@@ -657,10 +722,8 @@ class TestRunner(
   //same foldRight name but implementation changes
 
   def VQR_to_list: String = {
-    "baseName" + DELIMITER + "time" + DELIMITER +
-    "srcSize" + DELIMITER + "tgtSize" + DELIMITER + "hintSize" + DELIMITER +
-    "optName" + DELIMITER + "classifiedResult" + "\n" +
-    VQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
+    VQJobResult.columnNames + "\n" +
+    VQR.foldRight("")((i, s) => s + i.toString + "\n")
   }
 
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
