@@ -215,8 +215,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       val hint = triple_base + ".hint.json"
 
       TimeChecker.runWithClock("V#l-swtch") {
-        exec(s"${opt_path} -lowerswitch ${src} -o ${src}")
-        exec(s"${opt_path} -lowerswitch ${tgt} -o ${tgt}")
+        exec(s"${opt_path} ${src} -o ${src}")
+        exec(s"${opt_path} ${tgt} -o ${tgt}")
       }
 
       def get_cmd(dbg: Boolean): String =
