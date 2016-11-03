@@ -390,13 +390,12 @@ class TestRunner(
 
   sealed abstract class JobResult {
     val base_name: String
-    val fileSize: Long
     val time: Double
     // val classifiedResult: String
 
     // f"size: ${fileSize}%20s" +
     //padTo(' ', 20) PASSES type checking!!!!!
-    override def toString = base_name + DELIMITER + fileSize + DELIMITER + time
+    override def toString = base_name + DELIMITER + time
     //sometimes base_name is too long and padding cannot care it.
     //there should be spaces between them
   } //without val, it is private
@@ -409,19 +408,20 @@ class TestRunner(
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString + DELIMITER + generated
+      super.toString + DELIMITER + fileSize + DELIMITER + generated
     }
   }
 
   class VQJobResult(
     val base_name: String,
-    val fileSize: Long,
+    val fileSize: (Long, Long, Long),
     val time: Double,
     val optName: String,
     val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString + DELIMITER + optName
+      super.toString + DELIMITER + fileSize._1 + DELIMITER + fileSize._2 + DELIMITER +
+      fileSize._3 + DELIMITER + optName
     }
   }
   val GQ = new ConcurrentLinkedQueue[String]
@@ -501,7 +501,9 @@ class TestRunner(
   def processVQ(triple_base: String): VQJobResult = {
     TimeChecker.runWithClock("processVQ") {
       val t0 = System.currentTimeMillis
-      val fileSize = (new File(triple_base + ".ll")).length
+      val fileSize = ((new File(triple_base + ".src.bc")).length,
+        new File(triple_base + ".tgt.bc").length,
+        new File(triple_base + ".hint.json").length)
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
       val vres = llvmberry_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
