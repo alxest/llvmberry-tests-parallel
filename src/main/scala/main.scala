@@ -646,15 +646,20 @@ class TestRunner(
   //TODO check time consumption
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
-  def GQR_to_list: String =
+  def GQR_to_list: String = {
+    "baseName" + DELIMITER + "time" + DELIMITER + "fileSize" + DELIMITER + "generated" + "\n" +
     GQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
+  }
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
   //without toList, it causes stack overflow
   //same foldRight name but implementation changes
 
-  def VQR_to_list: String =
+  def VQR_to_list: String = {
+    "baseName" + DELIMITER + "time" + DELIMITER + "srcSize" + DELIMITER + "tgtSize" + DELIMITER +
+    "hintSize" + DELIMITER + "optName" + "\n" +
     VQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
+  }
 
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
       // foldRight("")((i, s) => s + i.toString + "\n")
