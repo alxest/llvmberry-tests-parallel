@@ -714,7 +714,7 @@ class TestRunner(
   //TODO print once more with optName as first index?
   def GQR_to_list: String = {
     GQJobResult.columnNames + "\n" +
-    GQR.foldRight("")((i, s) => s + i.toString + "\n")
+    GQR.foldLeft("")((s, i) => s + i.toString + "\n")
   }
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
@@ -723,7 +723,7 @@ class TestRunner(
 
   def VQR_to_list: String = {
     VQJobResult.columnNames + "\n" +
-    VQR.foldRight("")((i, s) => s + i.toString + "\n")
+    VQR.foldLeft("")((s, i) => s + i.toString + "\n")
   }
 
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
