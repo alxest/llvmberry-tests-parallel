@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 // import org.scalatest._
 
 object CommonLogics {
+  val DELIMITER = "\t"
 
   def format_double(x: Double): String =
     "%.1f".format(x)
@@ -395,11 +396,7 @@ class TestRunner(
 
     // f"size: ${fileSize}%20s" +
     //padTo(' ', 20) PASSES type checking!!!!!
-    def p(x: String): String = x.padTo(25, ' ')
-    override def toString =
-      s"${base_name}".padTo(115, ' ') +
-    p(s"   size: ${fileSize}") +
-    p(s"   time: ${format_double(time)}")
+    override def toString = base_name + DELIMITER + fileSize + DELIMITER + time
     //sometimes base_name is too long and padding cannot care it.
     //there should be spaces between them
   } //without val, it is private
@@ -412,8 +409,7 @@ class TestRunner(
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString +
-      p(s"generated: ${generated}")
+      super.toString + DELIMITER + generated
     }
   }
 
@@ -425,8 +421,7 @@ class TestRunner(
     val classifiedResult: LLVMBerryLogics.VResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString +
-      p(s"optName: ${optName}")
+      super.toString + DELIMITER + optName
     }
   }
   val GQ = new ConcurrentLinkedQueue[String]
@@ -650,25 +645,15 @@ class TestRunner(
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
   def GQR_to_list: String =
-    GQR.groupBy(_.classifiedResult).
-      foldRight("")((i, s) =>
-        s + string_with_bar(i._1.toString) + "\n\n" +
-          i._2.foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
-      )
+    GQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
   //without toList, it causes stack overflow
   //same foldRight name but implementation changes
 
-  def VQR_to_list: String = {
-    def idx1(x: VQJobResult) = x.classifiedResult
-    def idx2(x: VQJobResult) = x.optName
-    VQR.groupBy(idx1).
-      foldRight("")((i, s) =>
-        s + string_with_bar(i._1.toString) + "\n\n" +
-          i._2.sortBy(idx2).foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
-      )
-  }
+  def VQR_to_list: String =
+    VQR.foldRight("")((i, s) => s + i.toString + DELIMITER + i.classifiedResult + "\n")
+
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
       // foldRight("")((i, s) => s + i.toString + "\n")
   // VQR.groupBy(_.optName).map(x => (x._1, x._2.groupBy(_.classifiedResult))).
@@ -862,14 +847,10 @@ Usage:
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_matrix
-    val detail_txt =
-      string_with_bar() + "\n" + string_with_bar("Generate Result") + "\n" + string_with_bar() + "\n\n" +
-    runner.GQR_to_list + "\n\n" +
-    string_with_bar() + "\n" + string_with_bar("Validate Result") + "\n" + string_with_bar() + "\n\n" +
-    runner.VQR_to_list + "\n\n"
 
     write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
-    write_to_file(detail_txt, new File(llvmberry_logics.output_result_dir + "/report.detail"))
+    write_to_file(runner.GQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.generate"))
+    write_to_file(runner.VQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.validate"))
 
     // ("ag application " + llvmberry_logics.output_result_dir).!
     println("End Script")
