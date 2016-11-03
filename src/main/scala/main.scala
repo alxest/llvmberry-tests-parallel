@@ -268,7 +268,9 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
         case "d" =>
-          if(vres == LLVMBerryLogics.VFail)
+          if(vres == LLVMBerryLogics.VFail
+            || vres == LLVMBerryLogics.VAssertionFail
+            || vres == LLVMBerryLogics.VAdmitted)
             run_dbg
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
@@ -868,6 +870,8 @@ Usage:
 
     write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
     write_to_file(detail_txt, new File(llvmberry_logics.output_result_dir + "/report.detail"))
+
+    // ("ag application " + llvmberry_logics.output_result_dir).!
     println("End Script")
   }
 }
