@@ -205,7 +205,10 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
         write_to_file(txt, new File(ll_base + ".result"))
       // }
-      (gres, parseTimeOutput(res._3))
+      if(gres == GSuccess)
+        (gres, parseTimeOutput(res._3))
+      else
+        (gres, (0, 0, 0))
     }
   }
 
