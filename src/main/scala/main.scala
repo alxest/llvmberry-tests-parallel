@@ -330,16 +330,18 @@ object LLVMBerryLogics {
     var SROATime = 0.0
     assert(content(content.length - 10).split("\\s+").last == "Total"
       || { println("#########################################\n" + rawData + "\n\n\n\n\n\n") ; false })
+    val upperMostRowParsed = content(5).split(" ").map(_.filterNot(_ == '-')).filterNot(_ == "")
+    assert((upperMostRowParsed.dropRight(2).last == "Wall" &&
+      upperMostRowParsed.dropRight(1).last == "Time" &&
+      upperMostRowParsed.last == "Name") ||
+      { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
     val content2 = content.slice(6, content.length - 10).map{x =>
       // val y = x.split("\\s+")
       val y = x.split("[)]").map(_.trim)
-      val maxSize = y.size
-      assert(maxSize == 4 || maxSize == 5 ||
-        { println("#########################################\n" + x + "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n") ; false })
-      val time = y(maxSize-2).split(" ").head.toDouble
-      if(y(maxSize-1) == "Global Value Numbering") GVNTime += time
-      else if(y(maxSize-1) == "Combine redundant instructions") InstCombineTime += time
-      else if(y(maxSize-1) == "SROA") SROATime += time
+      val time = y(y.size-2).split(" ").head.toDouble
+      if(y.last == "Global Value Numbering") GVNTime += time
+      else if(y.last == "Combine redundant instructions") InstCombineTime += time
+      else if(y.last == "SROA") SROATime += time
       // y.mkString("--------")
       ()
     }
