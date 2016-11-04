@@ -326,13 +326,13 @@ object LLVMBerryLogics {
     var GVNTime = 0.0
     var SROATime = 0.0
     assert(content(content.length - 10).split("\\s+").last == "Total"
-      || { println(rawData) ; false })
+      || { println("#########################################\n" + rawData + "\n\n\n\n\n\n") ; false })
     val content2 = content.slice(6, content.length - 10).map{x =>
       // val y = x.split("\\s+")
       val y = x.split("[)]").map(_.trim)
       val maxSize = y.size
       assert(maxSize == 4 || maxSize == 5 ||
-        { println(x + "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData) ; false })
+        { println("#########################################\n" + x + "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n") ; false })
       val time = y(maxSize-2).split(" ").head.toDouble
       if(y(maxSize-1) == "Global Value Numbering") GVNTime += time
       else if(y(maxSize-1) == "Combine redundant instructions") InstCombineTime += time
