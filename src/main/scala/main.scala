@@ -586,7 +586,7 @@ class TestRunner(
     override def run {
       @tailrec
       def runner(): Unit = {
-        print_progress
+        printProgressIfIntervalPassed
         fetch_next_job match {
           case GQJob(ll_base) =>
             print_verbose("processGQ start -------> " + ll_base)
@@ -623,28 +623,33 @@ class TestRunner(
     threads.foreach(_.join)
     assert(GQ.size == 0 && GQR.size == GQ_total)
     assert(VQ.size == 0 && VQR.size == VQ_current_total)
+    printProgress
   }
 
   //TODO separate object
   var last_printed: Long = 0
 
-  def print_progress = Mutex.synchronized {
+  def printProgress = {
+    if(!verbose) (1 to 7) foreach { _ => goPreviousLine }
+    println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
+      format_double(GQ_estimated_ETA))
+    println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
+      format_double(VQ_estimated_ETA))
+    println("####" + VQ_current_total + " " + format_double(VQ_estimated_total))
+    println(GQR_to_row)
+    println(VQR_to_row)
+    // println(TimeChecker.data)
+    val dat = TimeChecker.getPercentData
+    val dat_ = dat.splitAt(dat.size/2)
+    println(dat_._1 + "\n" + dat_._2)
+  }
+
+  def printProgressIfIntervalPassed = Mutex.synchronized {
     TimeChecker.runWithClock("print_progress") {
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
-        if(!verbose) (1 to 7) foreach { _ => goPreviousLine }
-        println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
-          format_double(GQ_estimated_ETA))
-        println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
-          format_double(VQ_estimated_ETA))
-        println("####" + VQ_current_total + " " + format_double(VQ_estimated_total))
-        println(GQR_to_row)
-        println(VQR_to_row)
-        // println(TimeChecker.data)
-        val dat = TimeChecker.getPercentData
-        val dat_ = dat.splitAt(dat.size/2)
-        println(dat_._1 + "\n" + dat_._2)
+        printProgress
       }
     }
   }
