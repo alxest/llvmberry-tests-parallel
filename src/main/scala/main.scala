@@ -208,7 +208,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       if(gres == GSuccess)
         (gres, parseTimeOutput(res._3))
       else
-        (gres, (0, 0, 0))
+        (gres, (-2, -2, -2))
     }
   }
 
