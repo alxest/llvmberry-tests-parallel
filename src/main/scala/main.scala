@@ -212,7 +212,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     }
   }
 
-  def validate(triple_base: String): VResult = {
+  def validate(triple_base: String): (VResult, List[(Double, Double)]) = {
     TimeChecker.runWithClock("V") {
       val src = triple_base + ".src.bc"
       val tgt = triple_base + ".tgt.bc"
@@ -224,7 +224,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       }
 
       def get_cmd(dbg: Boolean): String =
-        s"${main_native_path} ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
+        s"${main_native_path} -t ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
 
       lazy val cmd_no_dbg = get_cmd(false)
       lazy val cmd_dbg = get_cmd(true)
@@ -282,7 +282,28 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           run_dbg
       }
 
-      vres
+      def parseTimeOutput(rawData: String) = {
+        val x = res._3.split("\n")
+          .filter(_.substring(0, 12) == "MEASURE_TIME")
+          .map(_.substring(12).trim.split("\\s+"))
+        assert(x.size == 5 ||
+          {println("Error!!!!!!!!!!!!!!!!!\n" + rawData + "\n" + vres + "\n\n\n\n") ; false})
+        for(i <- (0 until x.size)) {
+          assert(x(i).size == 3 ||
+            {println("Error!!!!!!!!!!!!!!!!!\n" + x(i).mkString("\t") + "\n\n\n\n") ; false})
+        }
+        x.map(i => (i(0).toDouble, i(1).toDouble)).toList
+        // val table: Map[String, (Double, Double)] =
+        //   new scala.collection.immutable.HashMap[String, (Double, Double)]()
+        // val table_filled = x.foldLeft(table){(s, i) =>
+        //   s.updated(i(2), (i(0).toDouble, i(1).toDouble))
+        // }
+        // println(x.map(_.mkString(" ")).mkString("\n") + "\n\n\n\n")
+      }
+      if(vres == VSuccess || vres == VFail)
+        (vres, parseTimeOutput(res._3))
+      else
+        (vres, List.fill(5)((-1, -1)))
     }
   }
 }
@@ -475,7 +496,8 @@ class TestRunner(
     val fileSize: (Long, Long, Long),
     val time: Double,
     val optName: String,
-    val classifiedResult: LLVMBerryLogics.VResult
+    val classifiedResult: LLVMBerryLogics.VResult,
+    val timeData: List[(Double, Double)]
   ) extends JobResult {
     override def toString: String = {
       super.toString + DELIMITER +
@@ -483,7 +505,10 @@ class TestRunner(
       fileSize._2 + DELIMITER +
       fileSize._3 + DELIMITER +
       optName + DELIMITER +
-      classifiedResult
+      classifiedResult +
+      timeData.
+        map(x => DELIMITER + x._1 + DELIMITER + x._2).
+        foldLeft("")((s, i) => s + i)
     }
   }
 
@@ -494,7 +519,17 @@ class TestRunner(
       "tgtSize" + DELIMITER +
       "hintSize" + DELIMITER +
       "optName" + DELIMITER +
-      "classifiedResult"
+      "classifiedResult" + DELIMITER +
+      "start" + DELIMITER +
+      "start-accumulated" + DELIMITER +
+      "read-done" + DELIMITER +
+      "read-done-accumulated" + DELIMITER +
+      "insert-nop-done" + DELIMITER +
+      "insert-nop-done-accumulated" + DELIMITER +
+      "convert-hint-done" + DELIMITER +
+      "convert-hint-done-accumulated" + DELIMITER +
+      "validation-done" + DELIMITER +
+      "validation-done-accumulated" + DELIMITER
     }
   }
   val GQ = new ConcurrentLinkedQueue[String]
@@ -578,9 +613,9 @@ class TestRunner(
         new File(triple_base + ".tgt.bc").length,
         new File(triple_base + ".hint.json").length)
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
-      val vres = llvmberry_logics.validate(triple_base)
+      val (vres, timeData) = llvmberry_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
-      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres)
+      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres, timeData)
     }
   }
 
