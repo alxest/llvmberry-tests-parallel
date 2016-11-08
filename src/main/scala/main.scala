@@ -318,34 +318,36 @@ object LLVMBerryLogics {
     else List()
   }
 
-  def parseTimeOutput(rawData: String) = {
+  def parseTimeOutput(rawData: String): (Double, Double, Double) = {
     val content = {
       val tmp = rawData.split("\n")
       val startIdx = tmp.toList.indexWhere(_.contains("... Pass execution timing report ..."))
       tmp.drop(startIdx-1)
     }
     //slice: [)
-    var InstCombineTime = 0.0
-    var GVNTime = 0.0
-    var SROATime = 0.0
     assert(content(content.length - 10).split("\\s+").last == "Total"
       || { println("#########################################\n" + rawData + "\n\n\n\n\n\n") ; false })
     val upperMostRowParsed = content(5).split(" ").map(_.filterNot(_ == '-')).filterNot(_ == "")
-    assert((upperMostRowParsed.dropRight(2).last == "Wall" &&
-      upperMostRowParsed.dropRight(1).last == "Time" &&
-      upperMostRowParsed.last == "Name") ||
-      { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
-    val content2 = content.slice(6, content.length - 10).map{x =>
-      // val y = x.split("\\s+")
-      val y = x.split("[)]").map(_.trim)
-      val time = y(y.size-2).split(" ").head.toDouble
-      if(y.last == "Global Value Numbering") GVNTime += time
-      else if(y.last == "Combine redundant instructions") InstCombineTime += time
-      else if(y.last == "SROA") SROATime += time
-      // y.mkString("--------")
-      ()
+
+    if(upperMostRowParsed.contains("User+System")) {
+      var InstCombineTime = 0.0
+      var GVNTime = 0.0
+      var SROATime = 0.0
+      assert(upperMostRowParsed.takeRight(4).toList == List("User+System", "Wall", "Time", "Name") ||
+        { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
+      val content2 = content.slice(6, content.length - 10).map{x =>
+        // val y = x.split("\\s+")
+        val y = x.split("[)]").map(_.trim)
+        val time = y(y.size-3).split(" ").head.toDouble
+        if(y.last == "Global Value Numbering") GVNTime += time
+        else if(y.last == "Combine redundant instructions") InstCombineTime += time
+        else if(y.last == "SROA") SROATime += time
+        // y.mkString("--------")
+        ()
+      }
+      (InstCombineTime, GVNTime, SROATime)
     }
-    (InstCombineTime, GVNTime, SROATime)
+    else (-1, -1, -1)
   }
 
 
@@ -442,15 +444,15 @@ class TestRunner(
     val base_name: String,
     val fileSize: Long,
     val time: Double,
-    val wallTimes: (Double, Double, Double),
+    val userSysTimes: (Double, Double, Double),
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
       super.toString + DELIMITER +
-      wallTimes._1 + DELIMITER +
-      wallTimes._2 + DELIMITER +
-      wallTimes._3 + DELIMITER +
+      userSysTimes._1 + DELIMITER +
+      userSysTimes._2 + DELIMITER +
+      userSysTimes._3 + DELIMITER +
       fileSize + DELIMITER +
       generated + DELIMITER +
       classifiedResult
@@ -460,9 +462,9 @@ class TestRunner(
   object GQJobResult {
     def columnNames =
       JobResult.columnNames + DELIMITER +
-    "wallTime-CombineInstructions" + DELIMITER +
-    "wallTime-GVN" + DELIMITER +
-    "wallTime-SROA" + DELIMITER +
+    "userSysTime-CombineInstructions" + DELIMITER +
+    "userSysTime-GVN" + DELIMITER +
+    "userSysTime-SROA" + DELIMITER +
     "fileSize" + DELIMITER +
     "generated" + DELIMITER +
     "classifiedResult"
@@ -560,12 +562,12 @@ class TestRunner(
     TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val (gres, wallTimes) = llvmberry_logics.generate(ll_base)
+      val (gres, userSysTimes) = llvmberry_logics.generate(ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
-      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, wallTimes, tri_bases.size, gres)
+      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, userSysTimes, tri_bases.size, gres)
     }
   }
 
