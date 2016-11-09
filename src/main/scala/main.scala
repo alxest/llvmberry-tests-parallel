@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 // import org.scalatest._
 
 object CommonLogics {
+  val DELIMITER = "\t"
 
   def format_double(x: Double): String =
     "%.1f".format(x)
@@ -191,9 +192,9 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       output_result_dir + "/vellvm.status")
   }
 
-  def generate(ll_base: String): GResult = {
+  def generate(ll_base: String): (GResult, (Double, Double, Double)) = {
     TimeChecker.runWithClock("G") {
-      val cmd = s"${opt_path} ${opt_arg} ${ll_base}.ll" +
+      val cmd = s"${opt_path} -time-passes ${opt_arg} ${ll_base}.ll" +
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
@@ -204,11 +205,14 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
         write_to_file(txt, new File(ll_base + ".result"))
       // }
-      gres
+      if(gres == GSuccess)
+        (gres, parseTimeOutput(res._3))
+      else
+        (gres, (-2, -2, -2))
     }
   }
 
-  def validate(triple_base: String): VResult = {
+  def validate(triple_base: String): (VResult, List[(Double, Double)]) = {
     TimeChecker.runWithClock("V") {
       val src = triple_base + ".src.bc"
       val tgt = triple_base + ".tgt.bc"
@@ -220,7 +224,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       }
 
       def get_cmd(dbg: Boolean): String =
-        s"${main_native_path} ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
+        s"${main_native_path} -t ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
 
       lazy val cmd_no_dbg = get_cmd(false)
       lazy val cmd_dbg = get_cmd(true)
@@ -268,7 +272,9 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
         case "d" =>
-          if(vres == LLVMBerryLogics.VFail)
+          if(vres == LLVMBerryLogics.VFail
+            || vres == LLVMBerryLogics.VAssertionFail
+            || vres == LLVMBerryLogics.VAdmitted)
             run_dbg
           if(vres == LLVMBerryLogics.VSuccess)
             rm_triple
@@ -276,7 +282,28 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           run_dbg
       }
 
-      vres
+      def parseTimeOutput(rawData: String) = {
+        val x = res._3.split("\n")
+          .filter(_.substring(0, 12) == "MEASURE_TIME")
+          .map(_.substring(12).trim.split("\\s+"))
+        assert(x.size == 5 ||
+          {println("Error!!!!!!!!!!!!!!!!!\n" + rawData + "\n" + vres + "\n\n\n\n") ; false})
+        for(i <- (0 until x.size)) {
+          assert(x(i).size == 3 ||
+            {println("Error!!!!!!!!!!!!!!!!!\n" + x(i).mkString("\t") + "\n\n\n\n") ; false})
+        }
+        x.map(i => (i(0).toDouble, i(1).toDouble)).toList
+        // val table: Map[String, (Double, Double)] =
+        //   new scala.collection.immutable.HashMap[String, (Double, Double)]()
+        // val table_filled = x.foldLeft(table){(s, i) =>
+        //   s.updated(i(2), (i(0).toDouble, i(1).toDouble))
+        // }
+        // println(x.map(_.mkString(" ")).mkString("\n") + "\n\n\n\n")
+      }
+      if(vres == VSuccess || vres == VFail)
+        (vres, parseTimeOutput(res._3))
+      else
+        (vres, List.fill(5)((-1, -1)))
     }
   }
 }
@@ -312,6 +339,39 @@ object LLVMBerryLogics {
     else List()
   }
 
+  def parseTimeOutput(rawData: String): (Double, Double, Double) = {
+    val content = {
+      val tmp = rawData.split("\n")
+      val startIdx = tmp.toList.indexWhere(_.contains("... Pass execution timing report ..."))
+      tmp.drop(startIdx-1)
+    }
+    //slice: [)
+    assert(content(content.length - 10).split("\\s+").last == "Total"
+      || { println("#########################################\n" + rawData + "\n\n\n\n\n\n") ; false })
+    val upperMostRowParsed = content(5).split(" ").map(_.filterNot(_ == '-')).filterNot(_ == "")
+
+    if(upperMostRowParsed.contains("User+System")) {
+      var InstCombineTime = 0.0
+      var GVNTime = 0.0
+      var SROATime = 0.0
+      assert(upperMostRowParsed.takeRight(4).toList == List("User+System", "Wall", "Time", "Name") ||
+        { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
+      val content2 = content.slice(6, content.length - 10).map{x =>
+        // val y = x.split("\\s+")
+        val y = x.split("[)]").map(_.trim)
+        val time = y(y.size-3).split(" ").head.toDouble
+        if(y.last == "Global Value Numbering") GVNTime += time
+        else if(y.last == "Combine redundant instructions") InstCombineTime += time
+        else if(y.last == "SROA") SROATime += time
+        // y.mkString("--------")
+        ()
+      }
+      (InstCombineTime, GVNTime, SROATime)
+    }
+    else (-1, -1, -1)
+  }
+
+
   def classifyGenerateResult(x: (Int, String, String)): GResult = {
     if(x._1 == 0) GSuccess
     else GFail
@@ -319,11 +379,12 @@ object LLVMBerryLogics {
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
     def f(y: String) = x._2.split('\n').last.contains(y)
-    def g(y: String) = x._3.split('\n').head.contains(y)
+    def g(y: String) = x._3.split('\n').last.contains(y)
+    def h(y: String) = x._2.split('\n').head.contains(y)
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
-    else if(f("Set to admitted.")) VAdmitted
+    else if(h("Set to admitted.")) VAdmitted
     else if(f("Set to fail.")) VAssertionFail
     else if(g("Fatal error: exception Failure") &&
       (g("Not_Supported") || g("is not supported for now."))) VNotSupported
@@ -387,44 +448,89 @@ class TestRunner(
 
   sealed abstract class JobResult {
     val base_name: String
-    val fileSize: Long
     val time: Double
     // val classifiedResult: String
 
     // f"size: ${fileSize}%20s" +
     //padTo(' ', 20) PASSES type checking!!!!!
-    def p(x: String): String = x.padTo(25, ' ')
-    override def toString =
-      s"${base_name}".padTo(115, ' ') +
-    p(s"   size: ${fileSize}") +
-    p(s"   time: ${format_double(time)}")
+    override def toString = base_name + DELIMITER + time
     //sometimes base_name is too long and padding cannot care it.
     //there should be spaces between them
   } //without val, it is private
+
+  object JobResult {
+    def columnNames = "baseName" + DELIMITER + "time"
+  }
 
   class GQJobResult(
     val base_name: String,
     val fileSize: Long,
     val time: Double,
+    val userSysTimes: (Double, Double, Double),
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
     override def toString: String = {
-      super.toString +
-      p(s"generated: ${generated}")
+      super.toString + DELIMITER +
+      userSysTimes._1 + DELIMITER +
+      userSysTimes._2 + DELIMITER +
+      userSysTimes._3 + DELIMITER +
+      fileSize + DELIMITER +
+      generated + DELIMITER +
+      classifiedResult
     }
+  }
+
+  object GQJobResult {
+    def columnNames =
+      JobResult.columnNames + DELIMITER +
+    "userSysTime-CombineInstructions" + DELIMITER +
+    "userSysTime-GVN" + DELIMITER +
+    "userSysTime-SROA" + DELIMITER +
+    "fileSize" + DELIMITER +
+    "generated" + DELIMITER +
+    "classifiedResult"
   }
 
   class VQJobResult(
     val base_name: String,
-    val fileSize: Long,
+    val fileSize: (Long, Long, Long),
     val time: Double,
     val optName: String,
-    val classifiedResult: LLVMBerryLogics.VResult
+    val classifiedResult: LLVMBerryLogics.VResult,
+    val timeData: List[(Double, Double)]
   ) extends JobResult {
     override def toString: String = {
-      super.toString +
-      p(s"optName: ${optName}")
+      super.toString + DELIMITER +
+      fileSize._1 + DELIMITER +
+      fileSize._2 + DELIMITER +
+      fileSize._3 + DELIMITER +
+      optName + DELIMITER +
+      classifiedResult +
+      timeData.
+        map(x => DELIMITER + x._1 + DELIMITER + x._2).
+        foldLeft("")((s, i) => s + i)
+    }
+  }
+
+  object VQJobResult {
+    def columnNames = {
+      JobResult.columnNames + DELIMITER +
+      "srcSize" + DELIMITER +
+      "tgtSize" + DELIMITER +
+      "hintSize" + DELIMITER +
+      "optName" + DELIMITER +
+      "classifiedResult" + DELIMITER +
+      "start" + DELIMITER +
+      "start-accumulated" + DELIMITER +
+      "read-done" + DELIMITER +
+      "read-done-accumulated" + DELIMITER +
+      "insert-nop-done" + DELIMITER +
+      "insert-nop-done-accumulated" + DELIMITER +
+      "convert-hint-done" + DELIMITER +
+      "convert-hint-done-accumulated" + DELIMITER +
+      "validation-done" + DELIMITER +
+      "validation-done-accumulated" + DELIMITER
     }
   }
   val GQ = new ConcurrentLinkedQueue[String]
@@ -492,23 +598,25 @@ class TestRunner(
     TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val gres = llvmberry_logics.generate(ll_base)
+      val (gres, userSysTimes) = llvmberry_logics.generate(ll_base)
       val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
-      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, tri_bases.size, gres)
+      new GQJobResult(ll_base, fileSize, (t1 - t0)/1000.0, userSysTimes, tri_bases.size, gres)
     }
   }
 
   def processVQ(triple_base: String): VQJobResult = {
     TimeChecker.runWithClock("processVQ") {
       val t0 = System.currentTimeMillis
-      val fileSize = (new File(triple_base + ".ll")).length
+      val fileSize = ((new File(triple_base + ".src.bc")).length,
+        new File(triple_base + ".tgt.bc").length,
+        new File(triple_base + ".hint.json").length)
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
-      val vres = llvmberry_logics.validate(triple_base)
+      val (vres, timeData) = llvmberry_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
-      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres)
+      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres, timeData)
     }
   }
 
@@ -516,7 +624,7 @@ class TestRunner(
     override def run {
       @tailrec
       def runner(): Unit = {
-        print_progress
+        printProgressIfIntervalPassed
         fetch_next_job match {
           case GQJob(ll_base) =>
             print_verbose("processGQ start -------> " + ll_base)
@@ -553,28 +661,33 @@ class TestRunner(
     threads.foreach(_.join)
     assert(GQ.size == 0 && GQR.size == GQ_total)
     assert(VQ.size == 0 && VQR.size == VQ_current_total)
+    printProgress
   }
 
   //TODO separate object
   var last_printed: Long = 0
 
-  def print_progress = Mutex.synchronized {
+  def printProgress = {
+    if(!verbose) (1 to 7) foreach { _ => goPreviousLine }
+    println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
+      format_double(GQ_estimated_ETA))
+    println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
+      format_double(VQ_estimated_ETA))
+    println("####" + VQ_current_total + " " + format_double(VQ_estimated_total))
+    println(GQR_to_row)
+    println(VQR_to_row)
+    // println(TimeChecker.data)
+    val dat = TimeChecker.getPercentData
+    val dat_ = dat.splitAt(dat.size/2)
+    println(dat_._1 + "\n" + dat_._2)
+  }
+
+  def printProgressIfIntervalPassed = Mutex.synchronized {
     TimeChecker.runWithClock("print_progress") {
       val t0 = System.currentTimeMillis()
       if(t0 - last_printed > 250) {
         last_printed = t0
-        if(!verbose) (1 to 7) foreach { _ => goPreviousLine }
-        println((GQR.size + "/" + GQ_total).padTo(30, ' ') +
-          format_double(GQ_estimated_ETA))
-        println((VQR.size + "/" + format_double(VQ_estimated_total)).padTo(30, ' ') +
-          format_double(VQ_estimated_ETA))
-        println("####" + VQ_current_total + " " + format_double(VQ_estimated_total))
-        println(GQR_to_row)
-        println(VQR_to_row)
-        // println(TimeChecker.data)
-        val dat = TimeChecker.getPercentData
-        val dat_ = dat.splitAt(dat.size/2)
-        println(dat_._1 + "\n" + dat_._2)
+        printProgress
       }
     }
   }
@@ -647,26 +760,20 @@ class TestRunner(
   //TODO check time consumption
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
-  def GQR_to_list: String =
-    GQR.groupBy(_.classifiedResult).
-      foldRight("")((i, s) =>
-        s + string_with_bar(i._1.toString) + "\n\n" +
-          i._2.foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
-      )
+  def GQR_to_list: String = {
+    GQJobResult.columnNames + "\n" +
+    GQR.foldLeft("")((s, i) => s + i.toString + "\n")
+  }
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
   //without toList, it causes stack overflow
   //same foldRight name but implementation changes
 
   def VQR_to_list: String = {
-    def idx1(x: VQJobResult) = x.classifiedResult
-    def idx2(x: VQJobResult) = x.optName
-    VQR.groupBy(idx1).
-      foldRight("")((i, s) =>
-        s + string_with_bar(i._1.toString) + "\n\n" +
-          i._2.sortBy(idx2).foldLeft("")((s, i) => (s + i + "\n")) + "\n\n"
-      )
+    VQJobResult.columnNames + "\n" +
+    VQR.foldLeft("")((s, i) => s + i.toString + "\n")
   }
+
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
       // foldRight("")((i, s) => s + i.toString + "\n")
   // VQR.groupBy(_.optName).map(x => (x._1, x._2.groupBy(_.classifiedResult))).
@@ -860,14 +967,12 @@ Usage:
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_matrix
-    val detail_txt =
-      string_with_bar() + "\n" + string_with_bar("Generate Result") + "\n" + string_with_bar() + "\n\n" +
-    runner.GQR_to_list + "\n\n" +
-    string_with_bar() + "\n" + string_with_bar("Validate Result") + "\n" + string_with_bar() + "\n\n" +
-    runner.VQR_to_list + "\n\n"
 
     write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
-    write_to_file(detail_txt, new File(llvmberry_logics.output_result_dir + "/report.detail"))
+    write_to_file(runner.GQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.generate"))
+    write_to_file(runner.VQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.validate"))
+
+    // ("ag application " + llvmberry_logics.output_result_dir).!
     println("End Script")
   }
 }
