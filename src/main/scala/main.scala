@@ -379,11 +379,12 @@ object LLVMBerryLogics {
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
     def f(y: String) = x._2.split('\n').last.contains(y)
-    def g(y: String) = x._3.split('\n').head.contains(y)
+    def g(y: String) = x._3.split('\n').last.contains(y)
+    def h(y: String) = x._2.split('\n').head.contains(y)
 
     if(f("Validation failed.")) VFail
     else if(f("Validation succeeded.")) VSuccess
-    else if(f("Set to admitted.")) VAdmitted
+    else if(h("Set to admitted.")) VAdmitted
     else if(f("Set to fail.")) VAssertionFail
     else if(g("Fatal error: exception Failure") &&
       (g("Not_Supported") || g("is not supported for now."))) VNotSupported
