@@ -379,7 +379,7 @@ object LLVMBerryLogics {
 
   def classifyValidateResult(x: (Int, String, String)): VResult = {
     def f(y: String) = x._2.split('\n').last.contains(y)
-    def g(y: String) = x._3.split('\n').last.contains(y)
+    def g(y: String) = x._3.split('\n').filterNot(_.substring(0, 12) == "MEASURE_TIME").head.contains(y)
     def h(y: String) = x._2.split('\n').head.contains(y)
 
     if(f("Validation failed.")) VFail
