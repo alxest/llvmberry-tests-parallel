@@ -143,7 +143,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val input_test_dir = option_map.get('i).get
   val generate_strategy = option_map.get('g).getOrElse("d")
   val validate_strategy = option_map.get('v).getOrElse("d")
-  val noresult: Boolean = option_map.contains('norersult)
+  val noresult: Boolean = option_map.contains('noresult)
   val report_nosuccess: Boolean = option_map.contains('report_nosuccess)
 
   val output_result_dir: String = {
