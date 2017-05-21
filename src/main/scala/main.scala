@@ -87,6 +87,12 @@ object CommonLogics {
       }
       else block
     }
+    def runWithClockSingle[A](block: => A): (A, Double) = {
+      val t0 = System.currentTimeMillis()
+      val result = block
+      val t1 = System.currentTimeMillis()
+      (result, (t1-t0).toDouble/1000)
+    }
   }
 }
 
@@ -989,14 +995,25 @@ Usage:
     //TODO separate report writing
     //it is more fault tolerant
     //also we may want to see report during main script is going
-    val summary_txt =
+    def get_summary_txt =
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
     runner.VQR_to_matrix
 
-    write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary"))
-    write_to_file(runner.GQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.generate"))
-    write_to_file(runner.VQR_to_list, new File(llvmberry_logics.output_result_dir + "/report.validate"))
+    val (summary_txt, summary_txt_time) = TimeChecker.runWithClockSingle(get_summary_txt)
+    println("Calculating report.summary took {summary_txt_time}")
+    val (_, summary_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary")))
+    println("Writing report.summary took {summary_txt_write_time}")
+
+    val (generate_txt, generate_txt_time) = TimeChecker.runWithClockSingle(runner.GQR_to_list)
+    println("Calculating report.generate took {generate_txt_time}")
+    val (_, generate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(generate_txt, new File(llvmberry_logics.output_result_dir + "/report.generate")))
+    println("Writing report.generate took {generate_txt_write_time}")
+
+    val (validate_txt, validate_txt_time) = TimeChecker.runWithClockSingle(runner.VQR_to_list)
+    println("Calculating report.validate took {validate_txt_time}")
+    val (_, validate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(validate_txt, new File(llvmberry_logics.output_result_dir + "/report.validate")))
+    println("Writing report.validate took {validate_txt_write_time}")
 
     // ("ag application " + llvmberry_logics.output_result_dir).!
     println("End Script")
