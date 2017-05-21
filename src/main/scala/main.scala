@@ -143,6 +143,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val input_test_dir = option_map.get('i).get
   val generate_strategy = option_map.get('g).getOrElse("d")
   val validate_strategy = option_map.get('v).getOrElse("d")
+  val noresult: Boolean = option_map.contains('norersult)
 
   val output_result_dir: String = {
     val ls = exec("ls")._2.split('\n')
@@ -209,7 +210,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
           string_with_bar("CMD") + "\n" + cmd + "\n\n" +
         string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
         string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-        write_to_file(txt, new File(ll_base + ".result"))
+        if(!noresult)
+          write_to_file(txt, new File(ll_base + ".result"))
       // }
       if(gres == GSuccess)
         (gres, parseTimeOutput(res._3))
@@ -272,7 +274,8 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         string_with_bar("CMD") + "\n" + cmd_no_dbg + "\n\n" +
       string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
       string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-      write_to_file(txt, new File(triple_base + ".result"))
+      if(!noresult)
+        write_to_file(txt, new File(triple_base + ".result"))
       validate_strategy match {
         case "f" =>
           if(vres == LLVMBerryLogics.VSuccess)
@@ -900,6 +903,10 @@ Usage:
 
 --verbose:
     Set verbose mode. It may be useful for debugging the script.
+
+--noresult:
+    Do not write ".result" files.
+    Currently, it prohibits both generation and validation results.
   """
   //TODO llvm-dis path?
 
@@ -937,6 +944,8 @@ Usage:
           nextOption(map ++ Map('j -> value), tail)
         case ("--verbose") :: tail =>
           nextOption(map ++ Map('verbose -> ""), tail)
+        case ("--noresult") :: tail =>
+          nextOption(map ++ Map('noresult -> ""), tail)
         case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
