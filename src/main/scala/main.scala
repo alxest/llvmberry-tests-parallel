@@ -888,9 +888,10 @@ Usage:
 -v, --validate-strategy <f|s|d>:
     Set validating strategy.
     "f": Fast. Always run without "-d" option.
-    "d": Try with without "-d" option, and then if validation has not succeeded,
-         re-run with "-d" option. Its result will be redirected to
-    ".debug_result" file. It does not run llvm-dis.
+    "d": Default. Try with without "-d" option, and then if validation has not
+         succeeded, re-run with "-d" option. Its result will be redirected to
+         ".debug_result" file. It does not run llvm-dis.
+    "s": Slow. Always run with "-d" option
     Default value is "d".
 
 -j, --jobs <int>:
@@ -1001,19 +1002,19 @@ Usage:
     runner.VQR_to_matrix
 
     val (summary_txt, summary_txt_time) = TimeChecker.runWithClockSingle(get_summary_txt)
-    println("Calculating report.summary took {summary_txt_time}")
+    println(s"Calculating report.summary took ${summary_txt_time}")
     val (_, summary_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary")))
-    println("Writing report.summary took {summary_txt_write_time}")
+    println(s"Writing report.summary took ${summary_txt_write_time}")
 
     val (generate_txt, generate_txt_time) = TimeChecker.runWithClockSingle(runner.GQR_to_list)
-    println("Calculating report.generate took {generate_txt_time}")
+    println(s"Calculating report.generate took ${generate_txt_time}")
     val (_, generate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(generate_txt, new File(llvmberry_logics.output_result_dir + "/report.generate")))
-    println("Writing report.generate took {generate_txt_write_time}")
+    println(s"Writing report.generate took ${generate_txt_write_time}")
 
     val (validate_txt, validate_txt_time) = TimeChecker.runWithClockSingle(runner.VQR_to_list)
-    println("Calculating report.validate took {validate_txt_time}")
+    println(s"Calculating report.validate took ${validate_txt_time}")
     val (_, validate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(validate_txt, new File(llvmberry_logics.output_result_dir + "/report.validate")))
-    println("Writing report.validate took {validate_txt_write_time}")
+    println(s"Writing report.validate took ${validate_txt_write_time}")
 
     // ("ag application " + llvmberry_logics.output_result_dir).!
     println("End Script")
