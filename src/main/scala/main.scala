@@ -144,6 +144,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   val generate_strategy = option_map.get('g).getOrElse("d")
   val validate_strategy = option_map.get('v).getOrElse("d")
   val noresult: Boolean = option_map.contains('norersult)
+  val report_nosuccess: Boolean = option_map.contains('report_nosuccess)
 
   val output_result_dir: String = {
     val ls = exec("ls")._2.split('\n')
@@ -796,8 +797,17 @@ class TestRunner(
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
   def GQR_to_list: String = {
-    GQJobResult.columnNames + "\n" +
-    GQR.foldLeft("")((s, i) => s + i.toString + "\n")
+    if(llvmberry_logics.report_nosuccess) {
+      GQJobResult.columnNames + "\n" +
+      GQR.foldLeft("")((s, i) => s +
+        (if(i.classifiedResult == LLVMBerryLogics.GSuccess) i.toString + "\n"
+        else "")
+      )
+    }
+    else {
+      GQJobResult.columnNames + "\n" +
+      GQR.foldLeft("")((s, i) => s + i.toString + "\n")
+    }
   }
   // GQR.sortBy(_.classifiedResult.toString).toList.
   // foldRight("")((i, s) => s + i.toString + "\n")
@@ -805,8 +815,17 @@ class TestRunner(
   //same foldRight name but implementation changes
 
   def VQR_to_list: String = {
-    VQJobResult.columnNames + "\n" +
-    VQR.foldLeft("")((s, i) => s + i.toString + "\n")
+    if(llvmberry_logics.report_nosuccess) {
+      VQJobResult.columnNames + "\n" +
+      VQR.foldLeft("")((s, i) => s +
+        (if(i.classifiedResult == LLVMBerryLogics.VSuccess) i.toString + "\n"
+        else "")
+      )
+    }
+    else {
+      VQJobResult.columnNames + "\n" +
+      VQR.foldLeft("")((s, i) => s + i.toString + "\n")
+    }
   }
 
       // (x => (x._1, x._2.groupBy(_.classifiedResult))).
@@ -907,6 +926,9 @@ Usage:
 --noresult:
     Do not write ".result" files.
     Currently, it prohibits both generation and validation results.
+
+--report-nosuccess:
+    Skip GSuccess/VSuccess cases on report.generate/report.validate.
   """
   //TODO llvm-dis path?
 
@@ -946,6 +968,8 @@ Usage:
           nextOption(map ++ Map('verbose -> ""), tail)
         case ("--noresult") :: tail =>
           nextOption(map ++ Map('noresult -> ""), tail)
+        case ("--report-nosuccess") :: tail =>
+          nextOption(map ++ Map('report_nosuccess -> ""), tail)
         case option :: _ =>
           println("Unknown option : " + option)
           System.exit(1)
