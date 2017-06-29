@@ -200,7 +200,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       output_result_dir + "/vellvm.status")
   }
 
-  def generate(ll_base: String): (GResult, (Double, Double, Double, Double, Double, Double)) = {
+  def generate(ll_base: String): (GResult, (Double, Double, Double, Double, Double, Double, Double, Double)) = {
     TimeChecker.runWithClock("G") {
       val cmd = s"${opt_path} -time-passes ${opt_arg} ${ll_base}.ll" +
       s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
@@ -217,7 +217,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       if(gres == GSuccess)
         (gres, parseTimeOutput(res._3))
       else
-        (gres, (-2, -2, -2, -2, -2, -2))
+        (gres, (-2, -2, -2, -2, -2, -2, -2, -2))
     }
   }
 
@@ -349,7 +349,7 @@ object LLVMBerryLogics {
     else List()
   }
 
-  def parseTimeOutput(rawData: String): (Double, Double, Double, Double, Double, Double) = {
+  def parseTimeOutput(rawData: String): (Double, Double, Double, Double, Double, Double, Double, Double) = {
     val content = {
       val tmp = rawData.split("\n")
       val startIdx = tmp.toList.indexWhere(_.contains("... Pass execution timing report ..."))
@@ -359,6 +359,7 @@ object LLVMBerryLogics {
     var InstCombineWallTime = 0.0
     var GVNWallTime = 0.0
     var SROAWallTime = 0.0
+    var LICMWallTime = 0.0
     assert(content(content.length - 10).split("\\s+").last == "Total"
       || { println("#########################################\n" + rawData + "\n\n\n\n\n\n") ; false })
     val upperMostRowParsed = content(5).split(" ").map(_.filterNot(_ == '-')).filterNot(_ == "")
@@ -375,6 +376,7 @@ object LLVMBerryLogics {
       if(y.last == "Global Value Numbering") GVNWallTime += time
       else if(y.last == "Combine redundant instructions") InstCombineWallTime += time
       else if(y.last == "SROA") SROAWallTime += time
+      else if(y.last == "Loop Invariant Code Motion") LICMWallTime += time 
       // y.mkString("--------")
       ()
     }
@@ -382,6 +384,7 @@ object LLVMBerryLogics {
       var InstCombineTime = 0.0
       var GVNTime = 0.0
       var SROATime = 0.0
+      var LICMTime = 0.0
       assert(upperMostRowParsed.takeRight(4).toList == List("User+System", "Wall", "Time", "Name") ||
         { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
       val content2 = content.slice(6, content.length - 10).map{x =>
@@ -391,12 +394,13 @@ object LLVMBerryLogics {
         if(y.last == "Global Value Numbering") GVNTime += time
         else if(y.last == "Combine redundant instructions") InstCombineTime += time
         else if(y.last == "SROA") SROATime += time
+        else if(y.last == "Loop Invariant Code Motion") LICMTime += time
         // y.mkString("--------")
         ()
       }
-      (InstCombineWallTime, GVNWallTime, SROAWallTime, InstCombineTime, GVNTime, SROATime)
+      (InstCombineWallTime, GVNWallTime, SROAWallTime, LICMWallTime, InstCombineTime, GVNTime, SROATime, LICMTime)
     }
-    else (InstCombineWallTime, GVNWallTime, SROAWallTime, -1, -1, -1)
+    else (InstCombineWallTime, GVNWallTime, SROAWallTime, LICMWallTime, -1, -1, -1, -1)
   }
 
 
@@ -496,7 +500,7 @@ class TestRunner(
     val time: Double,
     //val wallTimes: (Double, Double, Double),
     //val userSysTimes: (Double, Double, Double),
-    val unitedTimes: (Double, Double, Double, Double, Double, Double),
+    val unitedTimes: (Double, Double, Double, Double, Double, Double, Double, Double),
     val generated: Int,
     val classifiedResult: LLVMBerryLogics.GResult
   ) extends JobResult {
@@ -508,6 +512,8 @@ class TestRunner(
       unitedTimes._4 + DELIMITER +
       unitedTimes._5 + DELIMITER +
       unitedTimes._6 + DELIMITER +
+      unitedTimes._7 + DELIMITER +
+      unitedTimes._8 + DELIMITER +
       fileSize + DELIMITER +
       generated + DELIMITER +
       classifiedResult
@@ -520,9 +526,11 @@ class TestRunner(
     "wallTime-CombineInstructions" + DELIMITER +
     "wallTime-GVN" + DELIMITER +
     "wallTime-SROA" + DELIMITER +
+    "wallTime-LICM" + DELIMITER +
     "userSysTime-CombineInstructions" + DELIMITER +
     "userSysTime-GVN" + DELIMITER +
     "userSysTime-SROA" + DELIMITER +
+    "userSysTime-LICM" + DELIMITER +
     "fileSize" + DELIMITER +
     "generated" + DELIMITER +
     "classifiedResult"
