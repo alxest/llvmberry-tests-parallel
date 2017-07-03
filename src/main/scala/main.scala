@@ -825,14 +825,18 @@ class TestRunner(
   def VQR_to_list: String = {
     if(llvmberry_logics.report_nosuccess) {
       VQJobResult.columnNames + "\n" +
-      VQR.foldLeft("")((s, i) => s +
-        (if(i.classifiedResult == LLVMBerryLogics.VSuccess) i.toString + "\n"
-        else "")
-      )
+      VQR.foldLeft(StringBuilder.newBuilder)((sbldr, i) =>
+        if(i.classifiedResult == LLVMBerryLogics.VSuccess)
+          sbldr.append(i.toString).append("\n")
+        else
+          sbldr
+      ).toString
     }
     else {
       VQJobResult.columnNames + "\n" +
-      VQR.foldLeft("")((s, i) => s + i.toString + "\n")
+      VQR.foldLeft(StringBuilder.newBuilder)((sbldr, i) =>
+        sbldr.append(i.toString).append("\n")
+      ).toString()
     }
   }
 
