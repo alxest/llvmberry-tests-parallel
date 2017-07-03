@@ -336,7 +336,11 @@ object LLVMBerryLogics {
   def get_ll_bases(dir_name: String): List[String] = {
     val cmd = s"find ${dir_name} -name \\*.ll"
     val ret = exec(cmd)._2.split("\n").map(remove_extensions(1))
-    ret.toList
+    val retlist = ret.toList
+    val retlist_withfilesz = retlist.map (x => ((new File(x + ".ll")).length, x))
+    val retlist_sorted_withfsz = retlist_withfilesz.sortWith(_._1 > _._1)
+    val retlist_sorted = retlist_sorted_withfsz.map(x => x._2)
+    return retlist_sorted
     // scala.util.Random.shuffle(ret.toList)
   }
 
