@@ -356,7 +356,7 @@ object LLVMBerryLogics {
     val retlist_withfilesz = retlist.map (x => ((new File(x + ".ll")).length, x))
     val retlist_sorted_withfsz = retlist_withfilesz.sortWith(_._1 > _._1)
     val retlist_sorted = retlist_sorted_withfsz.map(x => x._2)
-    return retlist_sorted
+    retlist_sorted
     // scala.util.Random.shuffle(ret.toList)
   }
 
