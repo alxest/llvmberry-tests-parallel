@@ -63,6 +63,12 @@ object CommonLogics {
     "-" * half_pad + x + "-" * (pad - half_pad)
   }
 
+  val COMMIT_HEADER = string_with_bar("COMMIT") + "\n"
+  val DIFF_HEADER = string_with_bar("DIFF") + "\n"
+  val CMD_HEADER = string_with_bar("CMD") + "\n"
+  val STDOUT_HEADER = string_with_bar("STDOUT") + "\n"
+  val STDERR_HEADER = string_with_bar("STDERR") + "\n"
+
   object TimeChecker {
       // new scala.collection.immutable.HashMap[String, Map[String, Int]]().
     private var data: scala.collection.mutable.Map[String, Long] =
@@ -186,9 +192,12 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     def write_status(git_path: String, write_path: String) = {
       val commit = exec(s"cd ${git_path} && git show HEAD")._2
       val diff = exec(s"cd ${git_path} && git diff HEAD")._2
-      val txt =
-        string_with_bar("COMMIT") + "\n" + commit + "\n\n" +
-      string_with_bar("DIFF") + "\n" + diff + "\n\n"
+      val txtbuilder = new StringBuilder(COMMIT_HEADER.length() +
+                commit.length() + 2 + DIFF_HEADER.length() +
+                diff.length() + 3)
+      val txt = txtbuilder.append(COMMIT_HEADER).append(commit).
+                append("\n\n").append(DIFF_HEADER).append(diff).
+                append("\n\n").toString()
       write_to_file(txt, new File(write_path))
     }
 
@@ -207,10 +216,13 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       val res = exec(cmd)
       val gres = LLVMBerryLogics.classifyGenerateResult(res)
       // if(gres != LLVMBerryLogics.GSuccess) {
-        val txt =
-          string_with_bar("CMD") + "\n" + cmd + "\n\n" +
-        string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-        string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+        val txtbuilder = new StringBuilder(CMD_HEADER.length() +
+                  cmd.length() + 2 + STDOUT_HEADER.length() + res._2.length() +
+                  2 + STDERR_HEADER.length() + res._3.length() + 3)
+        val txt = txtbuilder.append(CMD_HEADER).append(cmd).
+                  append("\n\n").append(STDOUT_HEADER).append(res._2).
+                  append("\n\n").append(STDERR_HEADER).append(res._3).
+                  append("\n\n").toString()
         if(!noresult)
           write_to_file(txt, new File(ll_base + ".result"))
       // }
@@ -271,10 +283,14 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
 
       val res = exec(cmd_no_dbg)
       val vres = classifyValidateResult(res)
-      val txt =
-        string_with_bar("CMD") + "\n" + cmd_no_dbg + "\n\n" +
-      string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-      string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
+      val txtbuilder = new StringBuilder(CMD_HEADER.length() +
+                cmd_no_dbg.length() + 2 + STDOUT_HEADER.length() +
+                res._2.length() + 2 + STDERR_HEADER.length() +
+                res._3.length() + 3)
+      val txt = txtbuilder.append(CMD_HEADER).append(cmd_no_dbg).
+                append("\n\n").append(STDOUT_HEADER).append(res._2).
+                append("\n\n").append(STDERR_HEADER).append(res._3).
+                append("\n\n").toString()
       if(!noresult)
         write_to_file(txt, new File(triple_base + ".result"))
       validate_strategy match {
@@ -336,7 +352,11 @@ object LLVMBerryLogics {
   def get_ll_bases(dir_name: String): List[String] = {
     val cmd = s"find ${dir_name} -name \\*.ll"
     val ret = exec(cmd)._2.split("\n").map(remove_extensions(1))
-    ret.toList
+    val retlist = ret.toList
+    val retlist_withfilesz = retlist.map (x => ((new File(x + ".ll")).length, x))
+    val retlist_sorted_withfsz = retlist_withfilesz.sortWith(_._1 > _._1)
+    val retlist_sorted = retlist_sorted_withfsz.map(x => x._2)
+    retlist_sorted
     // scala.util.Random.shuffle(ret.toList)
   }
 
@@ -1043,8 +1063,8 @@ Usage:
     //also we may want to see report during main script is going
     def get_summary_txt =
       runner.GQR_to_row + "\n\n" + string_with_bar() + "\n" +
-    runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
-    runner.VQR_to_matrix
+      runner.VQR_to_row + "\n\n" + string_with_bar() + "\n" +
+      runner.VQR_to_matrix
 
     val (summary_txt, summary_txt_time) = TimeChecker.runWithClockSingle(get_summary_txt)
     println(s"Calculating report.summary took ${summary_txt_time}")
