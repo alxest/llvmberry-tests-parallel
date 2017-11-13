@@ -233,16 +233,11 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
     }
   }
 
-  def validate(triple_base: String): (VResult, List[(Double, Double)]) = {
+  def validate(triple_base: String): (VResult, Double, List[(Double, Double)]) = {
     TimeChecker.runWithClock("V") {
       val src = triple_base + ".src.bc"
       val tgt = triple_base + ".tgt.bc"
       val hint = triple_base + ".hint.json"
-
-      TimeChecker.runWithClock("V#l-swtch") {
-        exec(s"${opt_path} ${src} -o ${src}")
-        exec(s"${opt_path} ${tgt} -o ${tgt}")
-      }
 
       def get_cmd(dbg: Boolean): String =
         s"${main_native_path} -t ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
@@ -281,7 +276,12 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       //     write_to_file(txt, new File(triple_base + ".result"))
       //   }
 
-      val res = exec(cmd_no_dbg)
+      val (res, wallclock) = {
+        val t0 = System.currentTimeMillis
+        val res = exec(cmd_no_dbg)
+        val t1 = System.currentTimeMillis
+        (res, (t1 - t0)/1000.0)
+      }
       val vres = classifyValidateResult(res)
       val txtbuilder = new StringBuilder(CMD_HEADER.length() +
                 cmd_no_dbg.length() + 2 + STDOUT_HEADER.length() +
@@ -327,9 +327,9 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         // println(x.map(_.mkString(" ")).mkString("\n") + "\n\n\n\n")
       }
       if(vres == VSuccess || vres == VFail)
-        (vres, parseTimeOutput(res._3))
+        (vres, wallclock, parseTimeOutput(res._3))
       else
-        (vres, List.fill(5)((-1, -1)))
+        (vres, wallclock, List.fill(5)((-1, -1)))
     }
   }
 }
@@ -673,14 +673,12 @@ class TestRunner(
 
   def processVQ(triple_base: String): VQJobResult = {
     TimeChecker.runWithClock("processVQ") {
-      val t0 = System.currentTimeMillis
       val fileSize = ((new File(triple_base + ".src.bc")).length,
         new File(triple_base + ".tgt.bc").length,
         new File(triple_base + ".hint.json").length)
       val optName = LLVMBerryLogics.get_opt_name(triple_base)
-      val (vres, timeData) = llvmberry_logics.validate(triple_base)
-      val t1 = System.currentTimeMillis
-      new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres, timeData)
+      val (vres, wallclock, timeData) = llvmberry_logics.validate(triple_base)
+      new VQJobResult(triple_base, fileSize, wallclock, optName, vres, timeData)
     }
   }
 
