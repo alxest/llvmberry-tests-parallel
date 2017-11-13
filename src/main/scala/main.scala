@@ -242,7 +242,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       def get_cmd(dbg: Boolean): String =
         s"${main_native_path} -t ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
 
-      lazy val cmd_no_dbg = get_cmd(false)
+      lazy val cmd_no_dbg = "/usr/bin/time -f '%e %e' " + get_cmd(false)
       lazy val cmd_dbg = get_cmd(true)
 
       def llvm_dis =
@@ -277,10 +277,13 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
       //   }
 
       val (res, wallclock) = {
-        val t0 = System.currentTimeMillis
-        val res = exec(cmd_no_dbg)
-        val t1 = System.currentTimeMillis
-        (res, (t1 - t0)/1000.0)
+        var res = exec(cmd_no_dbg)
+        // println(res)
+        val stderr_notlast = res._3.split("\n").dropRight(1).mkString("\n")
+        val stderr_last = res._3.split("\n").last
+        res = (res._1, res._2, stderr_notlast)
+        val wallclock = stderr_last.split(" ").map(_.toDouble).foldLeft(0.0)(_ + _)/2
+        (res, wallclock)
       }
       val vres = classifyValidateResult(res)
       val txtbuilder = new StringBuilder(CMD_HEADER.length() +
