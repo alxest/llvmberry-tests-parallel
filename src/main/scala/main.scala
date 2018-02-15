@@ -1,7 +1,6 @@
 import sys.process._
 import java.io.File
 import scala.annotation.tailrec
-// import org.scalatest._
 
 object CommonLogics {
   val DELIMITER = "\t"
@@ -14,9 +13,6 @@ object CommonLogics {
     try { op(p) } finally { p.close() }
   }
 
-  //It does not have to be file, rather it can be String
-  //but differentiating type can far prevent error... really.
-  //also we can always wrap to path object if it is really a path.
   //originally used nio, but changed to this
   def write_to_file(contents: String, file: File): Unit = {
     TimeChecker.runWithClock("write_to_file") {
@@ -53,12 +49,10 @@ object CommonLogics {
 
   def goPreviousLine =
     System.out.print("\u001b[1A\u001b[2K");
-    // System.out.print("\33[1A\33[2K");
 
   def string_with_bar(x: String = ""): String = {
     val width = 190
     val pad = width - x.length
-      // exec("tput cols")._2.trim.toInt - x.size
     val half_pad = pad/2
     "-" * half_pad + x + "-" * (pad - half_pad)
   }
@@ -271,15 +265,6 @@ class CrellvmLogics(option_map: Map[Symbol, String]) {
               "-c",
               s"${cmd_dbg} > /dev/null 2> ${triple_base}.dbg_result")).!
         }
-      //   TimeChecker.runWithClock("V#dbg") {
-      //     val res =
-      //       exec(cmd_dbg)
-      //     val txt =
-      //       string_with_bar("CMD") + "\n" + cmd_dbg + "\n\n" +
-      //     string_with_bar("STDOUT") + "\n" + res._2 + "\n\n" +
-      //     string_with_bar("STDERR") + "\n" + res._3 + "\n\n"
-      //     write_to_file(txt, new File(triple_base + ".result"))
-      //   }
 
       val res = exec(cmd_no_dbg)
       val vres = classifyValidateResult(res)
@@ -319,12 +304,6 @@ class CrellvmLogics(option_map: Map[Symbol, String]) {
             {println("Error!!!!!!!!!!!!!!!!!\n" + x(i).mkString("\t") + "\n\n\n\n") ; false})
         }
         x.map(i => (i(0).toDouble, i(1).toDouble)).toList
-        // val table: Map[String, (Double, Double)] =
-        //   new scala.collection.immutable.HashMap[String, (Double, Double)]()
-        // val table_filled = x.foldLeft(table){(s, i) =>
-        //   s.updated(i(2), (i(0).toDouble, i(1).toDouble))
-        // }
-        // println(x.map(_.mkString(" ")).mkString("\n") + "\n\n\n\n")
       }
       if(vres == VSuccess || vres == VFail)
         (vres, parseTimeOutput(res._3))
@@ -357,7 +336,6 @@ object CrellvmLogics {
     val retlist_sorted_withfsz = retlist_withfilesz.sortWith(_._1 > _._1)
     val retlist_sorted = retlist_sorted_withfsz.map(x => x._2)
     retlist_sorted
-    // scala.util.Random.shuffle(ret.toList)
   }
 
   def remove_extensions(n: Int)(x: String): String =
@@ -390,14 +368,12 @@ object CrellvmLogics {
       upperMostRowParsed.last == "Name") ||
       { println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" + rawData + "\n\n\n\n\n\n\n\n") ; false })
     val content2 = content.slice(6, content.length - 10).map{x =>
-      // val y = x.split("\\s+")
       val y = x.split("[)]").map(_.trim)
       val time = y(y.size-2).split(" ").head.toDouble
       if(y.last == "Global Value Numbering") GVNWallTime += time
       else if(y.last == "Combine redundant instructions") InstCombineWallTime += time
       else if(y.last == "SROA") SROAWallTime += time
       else if(y.last == "Loop Invariant Code Motion") LICMWallTime += time 
-      // y.mkString("--------")
       ()
     }
     if(upperMostRowParsed.contains("User+System")) {
@@ -518,8 +494,6 @@ class TestRunner(
     val base_name: String,
     val fileSize: Long,
     val time: Double,
-    //val wallTimes: (Double, Double, Double),
-    //val userSysTimes: (Double, Double, Double),
     val unitedTimes: (Double, Double, Double, Double, Double, Double, Double, Double),
     val generated: Int,
     val classifiedResult: CrellvmLogics.GResult
@@ -809,9 +783,6 @@ class TestRunner(
     ((CrellvmLogics.VAssertionFail, 0)) +
     ((CrellvmLogics.VUnknown, 0))
 
-    // val table: Map[CrellvmLogics.VResult, Int] =
-    //   new scala.collection.immutable.HashMap[CrellvmLogics.VResult, Int]().
-    //     withDefaultValue(0)
     val table = VblankRow
     val table_filled = VQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
@@ -837,10 +808,6 @@ class TestRunner(
       GQR.foldLeft("")((s, i) => s + i.toString + "\n")
     }
   }
-  // GQR.sortBy(_.classifiedResult.toString).toList.
-  // foldRight("")((i, s) => s + i.toString + "\n")
-  //without toList, it causes stack overflow
-  //same foldRight name but implementation changes
 
   def VQR_to_list: String = {
     if(crellvm_logics.report_nosuccess) {
@@ -859,13 +826,6 @@ class TestRunner(
       ).toString()
     }
   }
-
-      // (x => (x._1, x._2.groupBy(_.classifiedResult))).
-      // foldRight("")((i, s) => s + i.toString + "\n")
-  // VQR.groupBy(_.optName).map(x => (x._1, x._2.groupBy(_.classifiedResult))).
-  //   foldRight("")((i, s) => s + i.toString + "\n")
-  // VQR.sortBy(x => (x.optName, x.classifiedResult.toString)).toList.
-  // foldRight("")((i, s) => s + i.toString + "\n")
 }
 
 
