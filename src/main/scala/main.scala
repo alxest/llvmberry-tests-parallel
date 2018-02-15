@@ -113,8 +113,8 @@ import CommonLogics._
 
 
 //get parameter and move to static object?
-class LLVMBerryLogics(option_map: Map[Symbol, String]) {
-  import LLVMBerryLogics._
+class CrellvmLogics(option_map: Map[Symbol, String]) {
+  import CrellvmLogics._
 
   val initializer = {
     val simplberry_path = option_map.get('s)
@@ -212,10 +212,10 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   def generate(ll_base: String): (GResult, (Double, Double, Double, Double, Double, Double, Double, Double)) = {
     TimeChecker.runWithClock("G") {
       val cmd = s"${opt_path} -time-passes ${opt_arg} ${ll_base}.ll" +
-      s" -o ${ll_base}.${LLVMBerryLogics.OUT_NAME}.ll -S"
+      s" -o ${ll_base}.${CrellvmLogics.OUT_NAME}.ll -S"
       val res = exec(cmd)
-      val gres = LLVMBerryLogics.classifyGenerateResult(res)
-      // if(gres != LLVMBerryLogics.GSuccess) {
+      val gres = CrellvmLogics.classifyGenerateResult(res)
+      // if(gres != CrellvmLogics.GSuccess) {
         val txtbuilder = new StringBuilder(CMD_HEADER.length() +
                   cmd.length() + 2 + STDOUT_HEADER.length() + res._2.length() +
                   2 + STDERR_HEADER.length() + res._3.length() + 3)
@@ -295,14 +295,14 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
         write_to_file(txt, new File(triple_base + ".result"))
       validate_strategy match {
         case "f" =>
-          if(vres == LLVMBerryLogics.VSuccess)
+          if(vres == CrellvmLogics.VSuccess)
             rm_triple
         case "d" =>
-          if(vres == LLVMBerryLogics.VFail
-            || vres == LLVMBerryLogics.VAssertionFail
-            || vres == LLVMBerryLogics.VAdmitted)
+          if(vres == CrellvmLogics.VFail
+            || vres == CrellvmLogics.VAssertionFail
+            || vres == CrellvmLogics.VAdmitted)
             run_dbg
-          if(vres == LLVMBerryLogics.VSuccess)
+          if(vres == CrellvmLogics.VSuccess)
             rm_triple
         case "s" =>
           run_dbg
@@ -334,7 +334,7 @@ class LLVMBerryLogics(option_map: Map[Symbol, String]) {
   }
 }
 
-object LLVMBerryLogics {
+object CrellvmLogics {
   sealed class GResult
   case object GSuccess extends GResult
   case object GFail extends GResult
@@ -476,7 +476,7 @@ object LLVMBerryLogics {
 
 
 class TestRunner(
-  val llvmberry_logics: LLVMBerryLogics,
+  val crellvm_logics: CrellvmLogics,
   val option_map: Map[Symbol, String]) {
 
   import java.util.concurrent.atomic._
@@ -522,7 +522,7 @@ class TestRunner(
     //val userSysTimes: (Double, Double, Double),
     val unitedTimes: (Double, Double, Double, Double, Double, Double, Double, Double),
     val generated: Int,
-    val classifiedResult: LLVMBerryLogics.GResult
+    val classifiedResult: CrellvmLogics.GResult
   ) extends JobResult {
     override def toString: String = {
       super.toString + DELIMITER +
@@ -561,7 +561,7 @@ class TestRunner(
     val fileSize: (Long, Long, Long),
     val time: Double,
     val optName: String,
-    val classifiedResult: LLVMBerryLogics.VResult,
+    val classifiedResult: CrellvmLogics.VResult,
     val timeData: List[(Double, Double)]
   ) extends JobResult {
     override def toString: String = {
@@ -662,8 +662,8 @@ class TestRunner(
     TimeChecker.runWithClock("processGQ") {
       val t0 = System.currentTimeMillis
       val fileSize = (new File(ll_base + ".ll")).length
-      val (gres, unitedTimes) = llvmberry_logics.generate(ll_base)
-      val tri_bases = LLVMBerryLogics.get_triple_bases(ll_base)
+      val (gres, unitedTimes) = crellvm_logics.generate(ll_base)
+      val tri_bases = CrellvmLogics.get_triple_bases(ll_base)
       tri_bases.foreach(VQ.offer(_))
       Mutex.synchronized { VQ_current_total += tri_bases.size }
       val t1 = System.currentTimeMillis
@@ -677,8 +677,8 @@ class TestRunner(
       val fileSize = ((new File(triple_base + ".src.bc")).length,
         new File(triple_base + ".tgt.bc").length,
         new File(triple_base + ".hint.json").length)
-      val optName = LLVMBerryLogics.get_opt_name(triple_base)
-      val (vres, timeData) = llvmberry_logics.validate(triple_base)
+      val optName = CrellvmLogics.get_opt_name(triple_base)
+      val (vres, timeData) = crellvm_logics.validate(triple_base)
       val t1 = System.currentTimeMillis
       new VQJobResult(triple_base, fileSize, (t1 - t0)/1000.0, optName, vres, timeData)
     }
@@ -713,7 +713,7 @@ class TestRunner(
 
   def run = {
     val ll_bases =
-      LLVMBerryLogics.get_ll_bases(llvmberry_logics.output_result_dir)
+      CrellvmLogics.get_ll_bases(crellvm_logics.output_result_dir)
     ll_bases.foreach(GQ.offer(_))
     GQ_total = GQ.size
     val threads: IndexedSeq[Thread] =
@@ -766,8 +766,8 @@ class TestRunner(
   }
 
   def GQR_to_row: String = {
-    val table: Map[LLVMBerryLogics.GResult, Int] =
-      new scala.collection.immutable.HashMap[LLVMBerryLogics.GResult, Int]().
+    val table: Map[CrellvmLogics.GResult, Int] =
+      new scala.collection.immutable.HashMap[CrellvmLogics.GResult, Int]().
         withDefaultValue(0)
     val table_filled = GQR.foldLeft(table){(s, i) =>
       s.updated(i.classifiedResult, s(i.classifiedResult) + 1)
@@ -776,16 +776,16 @@ class TestRunner(
   }
 
   def VQR_to_matrix = {
-    val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
-    ((LLVMBerryLogics.VSuccess, 0)) +
-    ((LLVMBerryLogics.VFail, 0)) +
-    ((LLVMBerryLogics.VNotSupported, 0)) +
-    ((LLVMBerryLogics.VAdmitted, 0)) +
-    ((LLVMBerryLogics.VAssertionFail, 0)) +
-    ((LLVMBerryLogics.VUnknown, 0))
+    val VblankRow = new scala.collection.immutable.HashMap[CrellvmLogics.VResult, Int]() +
+    ((CrellvmLogics.VSuccess, 0)) +
+    ((CrellvmLogics.VFail, 0)) +
+    ((CrellvmLogics.VNotSupported, 0)) +
+    ((CrellvmLogics.VAdmitted, 0)) +
+    ((CrellvmLogics.VAssertionFail, 0)) +
+    ((CrellvmLogics.VUnknown, 0))
 
-    val table: Map[String, Map[LLVMBerryLogics.VResult, Int]] =
-      new scala.collection.immutable.HashMap[String, Map[LLVMBerryLogics.VResult, Int]]().
+    val table: Map[String, Map[CrellvmLogics.VResult, Int]] =
+      new scala.collection.immutable.HashMap[String, Map[CrellvmLogics.VResult, Int]]().
         withDefaultValue(VblankRow)
 
 
@@ -801,16 +801,16 @@ class TestRunner(
   }
 
   def VQR_to_row: String = {
-    val VblankRow = new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]() +
-    ((LLVMBerryLogics.VSuccess, 0)) +
-    ((LLVMBerryLogics.VFail, 0)) +
-    ((LLVMBerryLogics.VNotSupported, 0)) +
-    ((LLVMBerryLogics.VAdmitted, 0)) +
-    ((LLVMBerryLogics.VAssertionFail, 0)) +
-    ((LLVMBerryLogics.VUnknown, 0))
+    val VblankRow = new scala.collection.immutable.HashMap[CrellvmLogics.VResult, Int]() +
+    ((CrellvmLogics.VSuccess, 0)) +
+    ((CrellvmLogics.VFail, 0)) +
+    ((CrellvmLogics.VNotSupported, 0)) +
+    ((CrellvmLogics.VAdmitted, 0)) +
+    ((CrellvmLogics.VAssertionFail, 0)) +
+    ((CrellvmLogics.VUnknown, 0))
 
-    // val table: Map[LLVMBerryLogics.VResult, Int] =
-    //   new scala.collection.immutable.HashMap[LLVMBerryLogics.VResult, Int]().
+    // val table: Map[CrellvmLogics.VResult, Int] =
+    //   new scala.collection.immutable.HashMap[CrellvmLogics.VResult, Int]().
     //     withDefaultValue(0)
     val table = VblankRow
     val table_filled = VQR.foldLeft(table){(s, i) =>
@@ -825,10 +825,10 @@ class TestRunner(
   //TODO check tolerance on big size
   //TODO print once more with optName as first index?
   def GQR_to_list: String = {
-    if(llvmberry_logics.report_nosuccess) {
+    if(crellvm_logics.report_nosuccess) {
       GQJobResult.columnNames + "\n" +
       GQR.foldLeft("")((s, i) => s +
-        (if(i.classifiedResult == LLVMBerryLogics.GSuccess) i.toString + "\n"
+        (if(i.classifiedResult == CrellvmLogics.GSuccess) i.toString + "\n"
         else "")
       )
     }
@@ -843,10 +843,10 @@ class TestRunner(
   //same foldRight name but implementation changes
 
   def VQR_to_list: String = {
-    if(llvmberry_logics.report_nosuccess) {
+    if(crellvm_logics.report_nosuccess) {
       VQJobResult.columnNames + "\n" +
       VQR.foldLeft(StringBuilder.newBuilder)((sbldr, i) =>
-        if(i.classifiedResult == LLVMBerryLogics.VSuccess)
+        if(i.classifiedResult == CrellvmLogics.VSuccess)
           sbldr.append(i.toString).append("\n")
         else
           sbldr
@@ -1015,26 +1015,26 @@ Usage:
 
   def main(args: Array[String]): Unit = {
     val option_map = parse_option(args)
-    val llvmberry_logics = new LLVMBerryLogics(option_map)
+    val crellvm_logics = new CrellvmLogics(option_map)
 
-    llvmberry_logics.copy_input_dir
-    println(llvmberry_logics.simplberry_path)
-    println(llvmberry_logics.output_result_dir)
+    crellvm_logics.copy_input_dir
+    println(crellvm_logics.simplberry_path)
+    println(crellvm_logics.output_result_dir)
     println ; println ; println(string_with_bar())
     println("Start Script")
-    llvmberry_logics.simplberry_path match {
+    crellvm_logics.simplberry_path match {
       case Some(spth) =>
-        llvmberry_logics.compile(spth)
+        crellvm_logics.compile(spth)
         println("Compile Done")
       case None =>
         println("No simplberry path specified. Not compiling")
     }
-    // llvmberry_logics.copy_executable
+    // crellvm_logics.copy_executable
     /*
      I added copy_executable for the following use case:
      Start test, abort, and then restart the test in the same dir.
      However I think that may not occur frequently...
-     Also that may require separation of llvmberry_logics from TestRunner
+     Also that may require separation of crellvm_logics from TestRunner
      It may make code more dirty than clean.
 
      If Separation is done well, use case may be:
@@ -1046,7 +1046,7 @@ Usage:
      It will make it much more tedious...
      */
 
-    val runner = new TestRunner(llvmberry_logics, option_map)
+    val runner = new TestRunner(crellvm_logics, option_map)
     for(i <- 1 to 12) println
     val t0 = System.currentTimeMillis()
     runner.run
@@ -1068,20 +1068,20 @@ Usage:
 
     val (summary_txt, summary_txt_time) = TimeChecker.runWithClockSingle(get_summary_txt)
     println(s"Calculating report.summary took ${summary_txt_time}")
-    val (_, summary_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(summary_txt, new File(llvmberry_logics.output_result_dir + "/report.summary")))
+    val (_, summary_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(summary_txt, new File(crellvm_logics.output_result_dir + "/report.summary")))
     println(s"Writing report.summary took ${summary_txt_write_time}")
 
     val (generate_txt, generate_txt_time) = TimeChecker.runWithClockSingle(runner.GQR_to_list)
     println(s"Calculating report.generate took ${generate_txt_time}")
-    val (_, generate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(generate_txt, new File(llvmberry_logics.output_result_dir + "/report.generate")))
+    val (_, generate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(generate_txt, new File(crellvm_logics.output_result_dir + "/report.generate")))
     println(s"Writing report.generate took ${generate_txt_write_time}")
 
     val (validate_txt, validate_txt_time) = TimeChecker.runWithClockSingle(runner.VQR_to_list)
     println(s"Calculating report.validate took ${validate_txt_time}")
-    val (_, validate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(validate_txt, new File(llvmberry_logics.output_result_dir + "/report.validate")))
+    val (_, validate_txt_write_time) = TimeChecker.runWithClockSingle(write_to_file(validate_txt, new File(crellvm_logics.output_result_dir + "/report.validate")))
     println(s"Writing report.validate took ${validate_txt_write_time}")
 
-    // ("ag application " + llvmberry_logics.output_result_dir).!
+    // ("ag application " + crellvm_logics.output_result_dir).!
     println("End Script")
   }
 }
