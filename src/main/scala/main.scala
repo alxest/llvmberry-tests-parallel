@@ -233,11 +233,6 @@ class CrellvmLogics(option_map: Map[Symbol, String]) {
       val tgt = triple_base + ".tgt.bc"
       val hint = triple_base + ".hint.json"
 
-      TimeChecker.runWithClock("V#l-swtch") {
-        exec(s"${opt_path} ${src} -o ${src}")
-        exec(s"${opt_path} ${tgt} -o ${tgt}")
-      }
-
       def get_cmd(dbg: Boolean): String =
         s"${main_native_path} -t ${if(dbg) "-d" else ""} ${src} ${tgt} ${hint}"
 
