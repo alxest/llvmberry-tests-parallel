@@ -221,7 +221,8 @@ class CrellvmLogics(option_map: Map[Symbol, String]) {
           write_to_file(txt, new File(ll_base + ".result"))
       // }
       if(gres == GSuccess)
-        (gres, parseTimeOutput(res._3))
+        (gres, (-2, -2, -2, -2, -2, -2, -2, -2)// parseTimeOutput(res._3)
+        )
       else
         (gres, (-2, -2, -2, -2, -2, -2, -2, -2))
     }
